@@ -1,5 +1,264 @@
-import { PageShell } from '@/components/PageShell';
-import { BookOpen } from 'lucide-react';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { BookOpen, Plus, Edit2, Trash2, X, Clock, DollarSign, CalendarDays } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+import { addWeeks, addDays, format } from 'date-fns';
+
+interface CourseForm {
+  title: string;
+  description: string;
+  duration: string;
+  fees: number;
+  recurring_schedule: { day: number; startTime: string; endTime: string }[];
+}
+
+const DAYS = [
+  { value: 0, ar: 'الأحد', en: 'Sunday' },
+  { value: 1, ar: 'الاثنين', en: 'Monday' },
+  { value: 2, ar: 'الثلاثاء', en: 'Tuesday' },
+  { value: 3, ar: 'الأربعاء', en: 'Wednesday' },
+  { value: 4, ar: 'الخميس', en: 'Thursday' },
+  { value: 5, ar: 'الجمعة', en: 'Friday' },
+  { value: 6, ar: 'السبت', en: 'Saturday' },
+];
+
+const COLORS = [
+  'bg-primary/20 text-primary border-primary/30',
+  'bg-secondary text-secondary-foreground border-secondary-foreground/20',
+  'bg-success/20 text-success border-success/30',
+  'bg-warning/20 text-warning border-warning/30',
+  'bg-accent text-accent-foreground border-accent-foreground/20',
+];
+
 export default function CoursesPage() {
-  return <PageShell titleAr="الدورات" titleEn="Courses" descAr="إدارة الدورات والمواد التعليمية" descEn="Manage courses and learning materials" icon={<BookOpen className="w-6 h-6 text-primary" />} />;
+  const { t, lang } = useLanguage();
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<CourseForm>({ title: '', description: '', duration: '', fees: 0, recurring_schedule: [] });
+
+  const { data: courses = [], isLoading } = useQuery({
+    queryKey: ['courses'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('courses').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: async (formData: CourseForm) => {
+      if (editingId) {
+        const { error } = await supabase.from('courses').update({
+          title: formData.title,
+          description: formData.description,
+          duration: formData.duration,
+          fees: formData.fees,
+          recurring_schedule: formData.recurring_schedule as any,
+        }).eq('id', editingId);
+        if (error) throw error;
+      } else {
+        const { data: course, error } = await supabase.from('courses').insert({
+          user_id: user!.id,
+          title: formData.title,
+          description: formData.description,
+          duration: formData.duration,
+          fees: formData.fees,
+          recurring_schedule: formData.recurring_schedule as any,
+        }).select().single();
+        if (error) throw error;
+
+        // Create sessions for 8 weeks
+        if (formData.recurring_schedule.length > 0) {
+          const sessions: any[] = [];
+          const colorIndex = Math.floor(Math.random() * COLORS.length);
+          for (let week = 0; week < 8; week++) {
+            for (const slot of formData.recurring_schedule) {
+              const baseDate = new Date();
+              const currentDay = baseDate.getDay();
+              const diff = (slot.day - currentDay + 7) % 7;
+              const sessionDate = addWeeks(addDays(baseDate, diff), week);
+              sessions.push({
+                course_id: course.id,
+                user_id: user!.id,
+                title: formData.title,
+                session_date: format(sessionDate, 'yyyy-MM-dd'),
+                start_time: slot.startTime,
+                end_time: slot.endTime || null,
+                color: COLORS[colorIndex],
+              });
+            }
+          }
+          if (sessions.length > 0) {
+            await supabase.from('sessions').insert(sessions);
+          }
+        }
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['courses'] });
+      qc.invalidateQueries({ queryKey: ['sessions'] });
+      toast.success(editingId ? t('تم تعديل الدورة', 'Course updated') : t('تم إنشاء الدورة', 'Course created'));
+      resetForm();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('courses').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['courses'] });
+      toast.success(t('تم حذف الدورة', 'Course deleted'));
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const resetForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm({ title: '', description: '', duration: '', fees: 0, recurring_schedule: [] });
+  };
+
+  const startEdit = (course: any) => {
+    setEditingId(course.id);
+    setForm({
+      title: course.title,
+      description: course.description || '',
+      duration: course.duration || '',
+      fees: course.fees || 0,
+      recurring_schedule: (course.recurring_schedule as any[]) || [],
+    });
+    setShowForm(true);
+  };
+
+  const addScheduleSlot = () => {
+    setForm(f => ({ ...f, recurring_schedule: [...f.recurring_schedule, { day: 0, startTime: '09:00', endTime: '10:00' }] }));
+  };
+
+  const removeScheduleSlot = (idx: number) => {
+    setForm(f => ({ ...f, recurring_schedule: f.recurring_schedule.filter((_, i) => i !== idx) }));
+  };
+
+  const updateScheduleSlot = (idx: number, field: string, value: any) => {
+    setForm(f => ({
+      ...f,
+      recurring_schedule: f.recurring_schedule.map((s, i) => i === idx ? { ...s, [field]: field === 'day' ? Number(value) : value } : s),
+    }));
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <BookOpen className="w-6 h-6 text-primary" />
+          <h1 className="text-2xl font-bold text-foreground">{t('الدورات', 'Courses')}</h1>
+        </div>
+        <button onClick={() => { resetForm(); setShowForm(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors">
+          <Plus className="w-4 h-4" />
+          {t('دورة جديدة', 'New Course')}
+        </button>
+      </div>
+
+      {/* Form Modal */}
+      <AnimatePresence>
+        {showForm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 backdrop-blur-sm p-4">
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-lg bg-card rounded-2xl shadow-xl border border-border overflow-hidden max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between p-4 border-b border-border">
+                <h2 className="text-lg font-bold">{editingId ? t('تعديل الدورة', 'Edit Course') : t('دورة جديدة', 'New Course')}</h2>
+                <button onClick={resetForm}><X className="w-5 h-5" /></button>
+              </div>
+              <form onSubmit={e => { e.preventDefault(); saveMutation.mutate(form); }} className="p-4 space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1 block">{t('اسم الدورة', 'Course Title')}</label>
+                  <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1 block">{t('الوصف', 'Description')}</label>
+                  <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none resize-none" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">{t('المدة', 'Duration')}</label>
+                    <input value={form.duration} onChange={e => setForm(f => ({ ...f, duration: e.target.value }))} placeholder={t('مثال: 3 أشهر', 'e.g. 3 months')} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">{t('الرسوم', 'Fees')}</label>
+                    <input type="number" value={form.fees} onChange={e => setForm(f => ({ ...f, fees: Number(e.target.value) }))} min={0} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
+                  </div>
+                </div>
+
+                {/* Recurring Schedule */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-foreground">{t('الجدول الأسبوعي', 'Weekly Schedule')}</label>
+                    <button type="button" onClick={addScheduleSlot} className="text-xs text-primary hover:underline">{t('+ إضافة موعد', '+ Add slot')}</button>
+                  </div>
+                  {form.recurring_schedule.map((slot, idx) => (
+                    <div key={idx} className="flex items-center gap-2 mb-2">
+                      <select value={slot.day} onChange={e => updateScheduleSlot(idx, 'day', e.target.value)} className="px-2 py-1.5 rounded-lg border border-input bg-background text-foreground text-sm">
+                        {DAYS.map(d => <option key={d.value} value={d.value}>{lang === 'ar' ? d.ar : d.en}</option>)}
+                      </select>
+                      <input type="time" value={slot.startTime} onChange={e => updateScheduleSlot(idx, 'startTime', e.target.value)} className="px-2 py-1.5 rounded-lg border border-input bg-background text-foreground text-sm" />
+                      <span className="text-muted-foreground text-sm">-</span>
+                      <input type="time" value={slot.endTime} onChange={e => updateScheduleSlot(idx, 'endTime', e.target.value)} className="px-2 py-1.5 rounded-lg border border-input bg-background text-foreground text-sm" />
+                      <button type="button" onClick={() => removeScheduleSlot(idx)} className="text-destructive"><X className="w-4 h-4" /></button>
+                    </div>
+                  ))}
+                </div>
+
+                <button type="submit" disabled={saveMutation.isPending} className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors">
+                  {saveMutation.isPending ? t('جاري الحفظ...', 'Saving...') : editingId ? t('حفظ التعديلات', 'Save Changes') : t('إنشاء الدورة', 'Create Course')}
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Courses Grid */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => <div key={i} className="glass-card rounded-xl p-6 animate-pulse h-48" />)}
+        </div>
+      ) : courses.length === 0 ? (
+        <div className="glass-card rounded-xl p-12 text-center">
+          <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">{t('لا توجد دورات بعد. أنشئ دورتك الأولى!', 'No courses yet. Create your first one!')}</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {courses.map((course: any) => (
+            <motion.div key={course.id} whileHover={{ y: -2 }} className="glass-card rounded-xl overflow-hidden cursor-pointer group" onClick={() => navigate(`/courses/${course.id}`)}>
+              <div className="p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <h3 className="text-lg font-bold text-foreground">{course.title}</h3>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => startEdit(course)} className="p-1.5 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4 text-muted-foreground" /></button>
+                    <button onClick={() => { if (confirm(t('هل أنت متأكد من الحذف؟', 'Are you sure?'))) deleteMutation.mutate(course.id); }} className="p-1.5 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                  </div>
+                </div>
+                {course.description && <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{course.description}</p>}
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  {course.duration && <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{course.duration}</span>}
+                  {course.fees > 0 && <span className="flex items-center gap-1"><DollarSign className="w-3.5 h-3.5" />{course.fees}</span>}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </motion.div>
+  );
 }
