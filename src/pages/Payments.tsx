@@ -65,7 +65,6 @@ export default function PaymentsPage() {
         <h1 className="text-2xl font-bold text-foreground">{t('المدفوعات', 'Payments')}</h1>
       </div>
 
-      {/* Summary */}
       <div className="grid grid-cols-3 gap-4">
         <div className="glass-card rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-success">{fullCount}</p>
@@ -101,13 +100,14 @@ export default function PaymentsPage() {
                   {editingId === payment.id ? (
                     <div className="flex items-center gap-2">
                       <input type="number" value={editAmount} onChange={e => setEditAmount(Number(e.target.value))} min={0} max={payment.total_amount} className="w-24 px-2 py-1 rounded-lg border border-input bg-background text-foreground text-sm" />
+                      <span className="text-sm text-muted-foreground">₪</span>
                       <button onClick={() => updateMutation.mutate({ id: payment.id, amount: editAmount })} className="p-1.5 rounded-lg hover:bg-success/10"><Check className="w-4 h-4 text-success" /></button>
                       <button onClick={() => setEditingId(null)} className="p-1.5 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
                     </div>
                   ) : (
                     <>
                       <div className="text-end">
-                        <p className="font-bold text-foreground">{payment.amount_paid} / {payment.total_amount}</p>
+                        <p className="font-bold text-foreground">{payment.amount_paid} / {payment.total_amount} ₪</p>
                         <span className={`text-xs px-2 py-0.5 rounded-full ${statusBadge(payment.status)}`}>{statusLabel(payment.status)}</span>
                       </div>
                       <button onClick={() => { setEditingId(payment.id); setEditAmount(payment.amount_paid); }} className="p-2 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4 text-muted-foreground" /></button>

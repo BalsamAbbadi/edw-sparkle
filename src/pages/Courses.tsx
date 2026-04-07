@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Plus, Edit2, Trash2, X, Clock, DollarSign, CalendarDays } from 'lucide-react';
+import { BookOpen, Plus, Edit2, Trash2, X, Clock, Users } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,6 +14,7 @@ interface CourseForm {
   description: string;
   duration: string;
   fees: number;
+  totalSessions: number;
   recurring_schedule: { day: number; startTime: string; endTime: string }[];
 }
 
@@ -42,7 +43,7 @@ export default function CoursesPage() {
   const navigate = useNavigate();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<CourseForm>({ title: '', description: '', duration: '', fees: 0, recurring_schedule: [] });
+  const [form, setForm] = useState<CourseForm>({ title: '', description: '', duration: '', fees: 0, totalSessions: 16, recurring_schedule: [] });
 
   const { data: courses = [], isLoading } = useQuery({
     queryKey: ['courses'],
@@ -54,52 +55,70 @@ export default function CoursesPage() {
     enabled: !!user,
   });
 
+  const { data: enrollmentCounts = {} } = useQuery({
+    queryKey: ['enrollment-counts'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('enrollments').select('course_id');
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      data.forEach((e: any) => { counts[e.course_id] = (counts[e.course_id] || 0) + 1; });
+      return counts;
+    },
+    enabled: !!user,
+  });
+
+  const { data: paymentsByCourse = {} } = useQuery({
+    queryKey: ['payments-by-course'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('payments').select('course_id, status');
+      if (error) throw error;
+      const result: Record<string, { full: number; partial: number; unpaid: number }> = {};
+      data.forEach((p: any) => {
+        if (!result[p.course_id]) result[p.course_id] = { full: 0, partial: 0, unpaid: 0 };
+        if (p.status === 'full') result[p.course_id].full++;
+        else if (p.status === 'partial') result[p.course_id].partial++;
+        else result[p.course_id].unpaid++;
+      });
+      return result;
+    },
+    enabled: !!user,
+  });
+
   const saveMutation = useMutation({
     mutationFn: async (formData: CourseForm) => {
       if (editingId) {
         const { error } = await supabase.from('courses').update({
-          title: formData.title,
-          description: formData.description,
-          duration: formData.duration,
-          fees: formData.fees,
-          recurring_schedule: formData.recurring_schedule as any,
+          title: formData.title, description: formData.description, duration: formData.duration, fees: formData.fees, recurring_schedule: formData.recurring_schedule as any,
         }).eq('id', editingId);
         if (error) throw error;
       } else {
         const { data: course, error } = await supabase.from('courses').insert({
-          user_id: user!.id,
-          title: formData.title,
-          description: formData.description,
-          duration: formData.duration,
-          fees: formData.fees,
-          recurring_schedule: formData.recurring_schedule as any,
+          user_id: user!.id, title: formData.title, description: formData.description, duration: formData.duration, fees: formData.fees, recurring_schedule: formData.recurring_schedule as any,
         }).select().single();
         if (error) throw error;
 
-        // Create sessions for 8 weeks
+        // Create sessions based on schedule and total sessions count
         if (formData.recurring_schedule.length > 0) {
+          const sessionsPerWeek = formData.recurring_schedule.length;
+          const totalWeeks = Math.ceil(formData.totalSessions / sessionsPerWeek);
           const sessions: any[] = [];
           const colorIndex = Math.floor(Math.random() * COLORS.length);
-          for (let week = 0; week < 8; week++) {
+          let sessionCount = 0;
+          for (let week = 0; week < totalWeeks && sessionCount < formData.totalSessions; week++) {
             for (const slot of formData.recurring_schedule) {
+              if (sessionCount >= formData.totalSessions) break;
               const baseDate = new Date();
               const currentDay = baseDate.getDay();
               const diff = (slot.day - currentDay + 7) % 7;
-              const sessionDate = addWeeks(addDays(baseDate, diff), week);
+              const sessionDate = addWeeks(addDays(baseDate, diff === 0 && week === 0 ? 0 : diff), week);
               sessions.push({
-                course_id: course.id,
-                user_id: user!.id,
-                title: formData.title,
-                session_date: format(sessionDate, 'yyyy-MM-dd'),
-                start_time: slot.startTime,
-                end_time: slot.endTime || null,
-                color: COLORS[colorIndex],
+                course_id: course.id, user_id: user!.id, title: formData.title,
+                session_date: format(sessionDate, 'yyyy-MM-dd'), start_time: slot.startTime, end_time: slot.endTime || null, color: COLORS[colorIndex],
               });
+              sessionCount++;
             }
           }
-          if (sessions.length > 0) {
-            await supabase.from('sessions').insert(sessions);
-          }
+          if (sessions.length > 0) await supabase.from('sessions').insert(sessions);
         }
       }
     },
@@ -121,40 +140,42 @@ export default function CoursesPage() {
       qc.invalidateQueries({ queryKey: ['courses'] });
       toast.success(t('تم حذف الدورة', 'Course deleted'));
     },
-    onError: (e: any) => toast.error(e.message),
   });
 
   const resetForm = () => {
-    setShowForm(false);
-    setEditingId(null);
-    setForm({ title: '', description: '', duration: '', fees: 0, recurring_schedule: [] });
+    setShowForm(false); setEditingId(null);
+    setForm({ title: '', description: '', duration: '', fees: 0, totalSessions: 16, recurring_schedule: [] });
   };
 
   const startEdit = (course: any) => {
     setEditingId(course.id);
-    setForm({
-      title: course.title,
-      description: course.description || '',
-      duration: course.duration || '',
-      fees: course.fees || 0,
-      recurring_schedule: (course.recurring_schedule as any[]) || [],
-    });
+    setForm({ title: course.title, description: course.description || '', duration: course.duration || '', fees: course.fees || 0, totalSessions: 16, recurring_schedule: (course.recurring_schedule as any[]) || [] });
     setShowForm(true);
   };
 
-  const addScheduleSlot = () => {
-    setForm(f => ({ ...f, recurring_schedule: [...f.recurring_schedule, { day: 0, startTime: '09:00', endTime: '10:00' }] }));
-  };
+  const addScheduleSlot = () => setForm(f => ({ ...f, recurring_schedule: [...f.recurring_schedule, { day: 0, startTime: '09:00', endTime: '10:00' }] }));
+  const removeScheduleSlot = (idx: number) => setForm(f => ({ ...f, recurring_schedule: f.recurring_schedule.filter((_, i) => i !== idx) }));
+  const updateScheduleSlot = (idx: number, field: string, value: any) => setForm(f => ({
+    ...f, recurring_schedule: f.recurring_schedule.map((s, i) => i === idx ? { ...s, [field]: field === 'day' ? Number(value) : value } : s),
+  }));
 
-  const removeScheduleSlot = (idx: number) => {
-    setForm(f => ({ ...f, recurring_schedule: f.recurring_schedule.filter((_, i) => i !== idx) }));
-  };
-
-  const updateScheduleSlot = (idx: number, field: string, value: any) => {
-    setForm(f => ({
-      ...f,
-      recurring_schedule: f.recurring_schedule.map((s, i) => i === idx ? { ...s, [field]: field === 'day' ? Number(value) : value } : s),
-    }));
+  const PaymentMiniChart = ({ stats }: { stats: { full: number; partial: number; unpaid: number } }) => {
+    const total = stats.full + stats.partial + stats.unpaid;
+    if (total === 0) return null;
+    return (
+      <div className="flex items-center gap-2 mt-2">
+        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden flex">
+          {stats.full > 0 && <div className="bg-success h-full" style={{ width: `${(stats.full / total) * 100}%` }} />}
+          {stats.partial > 0 && <div className="bg-warning h-full" style={{ width: `${(stats.partial / total) * 100}%` }} />}
+          {stats.unpaid > 0 && <div className="bg-destructive h-full" style={{ width: `${(stats.unpaid / total) * 100}%` }} />}
+        </div>
+        <div className="flex gap-1.5 text-[10px]">
+          <span className="text-success">{stats.full}</span>
+          <span className="text-warning">{stats.partial}</span>
+          <span className="text-destructive">{stats.unpaid}</span>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -165,8 +186,7 @@ export default function CoursesPage() {
           <h1 className="text-2xl font-bold text-foreground">{t('الدورات', 'Courses')}</h1>
         </div>
         <button onClick={() => { resetForm(); setShowForm(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors">
-          <Plus className="w-4 h-4" />
-          {t('دورة جديدة', 'New Course')}
+          <Plus className="w-4 h-4" />{t('دورة جديدة', 'New Course')}
         </button>
       </div>
 
@@ -188,26 +208,30 @@ export default function CoursesPage() {
                   <label className="text-sm font-medium text-foreground mb-1 block">{t('الوصف', 'Description')}</label>
                   <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none resize-none" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1 block">{t('المدة', 'Duration')}</label>
-                    <input value={form.duration} onChange={e => setForm(f => ({ ...f, duration: e.target.value }))} placeholder={t('مثال: 3 أشهر', 'e.g. 3 months')} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
+                    <input value={form.duration} onChange={e => setForm(f => ({ ...f, duration: e.target.value }))} placeholder={t('3 أشهر', '3 months')} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-foreground mb-1 block">{t('الرسوم', 'Fees')}</label>
+                    <label className="text-sm font-medium text-foreground mb-1 block">{t('الرسوم (₪)', 'Fees (₪)')}</label>
                     <input type="number" value={form.fees} onChange={e => setForm(f => ({ ...f, fees: Number(e.target.value) }))} min={0} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">{t('عدد الحصص', 'Total Sessions')}</label>
+                    <input type="number" value={form.totalSessions} onChange={e => setForm(f => ({ ...f, totalSessions: Number(e.target.value) }))} min={1} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
                   </div>
                 </div>
 
-                {/* Recurring Schedule */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium text-foreground">{t('الجدول الأسبوعي', 'Weekly Schedule')}</label>
+                    <label className="text-sm font-medium text-foreground">{t('مواعيد الحصص الأسبوعية', 'Weekly Schedule')}</label>
                     <button type="button" onClick={addScheduleSlot} className="text-xs text-primary hover:underline">{t('+ إضافة موعد', '+ Add slot')}</button>
                   </div>
+                  {form.recurring_schedule.length === 0 && <p className="text-xs text-muted-foreground">{t('أضف الأيام والأوقات لكل حصة أسبوعية', 'Add days and times for each weekly session')}</p>}
                   {form.recurring_schedule.map((slot, idx) => (
                     <div key={idx} className="flex items-center gap-2 mb-2">
-                      <select value={slot.day} onChange={e => updateScheduleSlot(idx, 'day', e.target.value)} className="px-2 py-1.5 rounded-lg border border-input bg-background text-foreground text-sm">
+                      <select value={slot.day} onChange={e => updateScheduleSlot(idx, 'day', e.target.value)} className="px-2 py-1.5 rounded-lg border border-input bg-background text-foreground text-sm flex-1">
                         {DAYS.map(d => <option key={d.value} value={d.value}>{lang === 'ar' ? d.ar : d.en}</option>)}
                       </select>
                       <input type="time" value={slot.startTime} onChange={e => updateScheduleSlot(idx, 'startTime', e.target.value)} className="px-2 py-1.5 rounded-lg border border-input bg-background text-foreground text-sm" />
@@ -229,9 +253,7 @@ export default function CoursesPage() {
 
       {/* Courses Grid */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map(i => <div key={i} className="glass-card rounded-xl p-6 animate-pulse h-48" />)}
-        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{[1, 2, 3].map(i => <div key={i} className="glass-card rounded-xl p-6 animate-pulse h-48" />)}</div>
       ) : courses.length === 0 ? (
         <div className="glass-card rounded-xl p-12 text-center">
           <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
@@ -239,24 +261,30 @@ export default function CoursesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {courses.map((course: any) => (
-            <motion.div key={course.id} whileHover={{ y: -2 }} className="glass-card rounded-xl overflow-hidden cursor-pointer group" onClick={() => navigate(`/courses/${course.id}`)}>
-              <div className="p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <h3 className="text-lg font-bold text-foreground">{course.title}</h3>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => startEdit(course)} className="p-1.5 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4 text-muted-foreground" /></button>
-                    <button onClick={() => { if (confirm(t('هل أنت متأكد من الحذف؟', 'Are you sure?'))) deleteMutation.mutate(course.id); }} className="p-1.5 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+          {courses.map((course: any) => {
+            const studentNum = enrollmentCounts[course.id] || 0;
+            const pStats = paymentsByCourse[course.id] || { full: 0, partial: 0, unpaid: 0 };
+            return (
+              <motion.div key={course.id} whileHover={{ y: -3 }} className="glass-card rounded-2xl overflow-hidden cursor-pointer group" onClick={() => navigate(`/courses/${course.id}`)}>
+                <div className="p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="text-lg font-bold text-foreground">{course.title}</h3>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => startEdit(course)} className="p-1.5 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4 text-muted-foreground" /></button>
+                      <button onClick={() => { if (confirm(t('هل أنت متأكد من الحذف؟', 'Are you sure?'))) deleteMutation.mutate(course.id); }} className="p-1.5 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                    </div>
                   </div>
+                  {course.description && <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{course.description}</p>}
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    {course.duration && <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{course.duration}</span>}
+                    {course.fees > 0 && <span className="flex items-center gap-1">₪ {course.fees}</span>}
+                    <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />{studentNum}</span>
+                  </div>
+                  <PaymentMiniChart stats={pStats} />
                 </div>
-                {course.description && <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{course.description}</p>}
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  {course.duration && <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{course.duration}</span>}
-                  {course.fees > 0 && <span className="flex items-center gap-1"><DollarSign className="w-3.5 h-3.5" />{course.fees}</span>}
-                </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </motion.div>

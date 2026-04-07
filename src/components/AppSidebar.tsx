@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   BookOpen, Users, CreditCard, Calendar, Bell, StickyNote,
-  Settings, User, Home, FolderOpen, Menu, Sparkles
+  Settings, User, Home, FolderOpen, Bot, Sparkles
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -20,6 +20,7 @@ const navItems = [
   { icon: StickyNote, titleAr: 'الملاحظات', titleEn: 'Notes', url: '/notes' },
   { icon: FolderOpen, titleAr: 'الملفات', titleEn: 'Files', url: '/files' },
   { icon: Bell, titleAr: 'الإشعارات', titleEn: 'Notifications', url: '/notifications' },
+  { icon: Bot, titleAr: 'مساعدك الاصطناعي', titleEn: 'AI Assistant', url: '/ai-chat' },
 ];
 
 const bottomItems = [

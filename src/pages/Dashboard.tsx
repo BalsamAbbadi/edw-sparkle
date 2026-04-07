@@ -11,6 +11,16 @@ export default function Dashboard() {
   const { t } = useLanguage();
   const { user } = useAuth();
 
+  const { data: profile } = useQuery({
+    queryKey: ['profile'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('profiles').select('*').eq('user_id', user!.id).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
   const { data: studentCount = 0 } = useQuery({
     queryKey: ['student-count'],
     queryFn: async () => {
@@ -44,6 +54,8 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
+  const displayName = profile?.display_name || user?.email?.split('@')[0] || '';
+
   const stats = [
     { icon: Users, label: t('إجمالي الطلاب', 'Total Students'), value: String(studentCount), color: 'text-primary', bgColor: 'bg-primary/10' },
     { icon: BookOpen, label: t('الدورات النشطة', 'Active Courses'), value: String(courseCount), color: 'text-secondary-foreground', bgColor: 'bg-secondary' },
@@ -54,7 +66,9 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-foreground">{t('مرحباً بك 👋', 'Welcome 👋')}</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+          {t(`مرحباً بك ${displayName} 👋`, `Welcome ${displayName} 👋`)}
+        </h1>
         <p className="text-muted-foreground mt-1">{t('نظرة عامة على نشاطك اليوم', 'Overview of your activity today')}</p>
       </div>
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { FolderOpen, Download, Trash2 } from 'lucide-react';
+import { FolderOpen, Download, Trash2, ExternalLink } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -40,6 +40,11 @@ export default function FilesPage() {
     return '📎';
   };
 
+  const getViewerUrl = (url: string, type: string) => {
+    if (type?.includes('pdf')) return url;
+    return `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       <div className="flex items-center gap-3">
@@ -68,7 +73,8 @@ export default function FilesPage() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <a href={file.file_url} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-muted"><Download className="w-4 h-4 text-primary" /></a>
+                <a href={getViewerUrl(file.file_url, file.file_type)} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-muted" title={t('فتح', 'Open')}><ExternalLink className="w-4 h-4 text-primary" /></a>
+                <a href={file.file_url} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-muted" title={t('تنزيل', 'Download')}><Download className="w-4 h-4 text-muted-foreground" /></a>
                 <button onClick={() => deleteMutation.mutate(file.id)} className="p-2 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
               </div>
             </div>
