@@ -4,12 +4,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, ChevronLeft, Calendar as CalendarIcon } from 'lucide-react';
-import { format, addDays, startOfWeek, addWeeks, subWeeks, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, parseISO } from 'date-fns';
+import { format, addDays, startOfWeek, addWeeks, subWeeks, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 
 type ViewMode = 'day' | 'week' | 'month';
+
+const DAY_NAMES_AR = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+const DAY_NAMES_AR_SHORT = ['سبت', 'أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة'];
+const DAY_NAMES_EN = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const DAY_NAMES_EN_SHORT = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
 export function DashboardCalendar() {
   const { t, lang } = useLanguage();
@@ -57,7 +61,7 @@ export function DashboardCalendar() {
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
-  const hours = Array.from({ length: 12 }, (_, i) => i + 8);
+  const hours = Array.from({ length: 14 }, (_, i) => i + 7);
 
   const views: { key: ViewMode; label: string }[] = [
     { key: 'day', label: t('يوم', 'Day') },
@@ -94,18 +98,28 @@ export function DashboardCalendar() {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const dayNames = lang === 'ar'
-    ? ['سبت', 'أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة']
-    : ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  // Get current day name for daily view header
+  const currentDayIndex = (currentDate.getDay() + 1) % 7; // Adjusted for Saturday start
+  const dayNameFull = lang === 'ar' ? DAY_NAMES_AR[currentDayIndex] : DAY_NAMES_EN[currentDayIndex];
+
+  // Title based on view
+  let headerTitle = '';
+  if (viewMode === 'day') {
+    headerTitle = `${dayNameFull} - ${format(currentDate, 'dd / MM / yyyy')}`;
+  } else if (viewMode === 'week') {
+    headerTitle = format(currentDate, 'dd MMMM yyyy', { locale });
+  } else {
+    headerTitle = format(currentDate, 'MMMM yyyy', { locale });
+  }
+
+  const dayNames = lang === 'ar' ? DAY_NAMES_AR_SHORT : DAY_NAMES_EN_SHORT;
 
   return (
-    <div className="glass-card rounded-xl overflow-hidden">
+    <div className="glass-card rounded-2xl overflow-hidden">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border-b border-border gap-3">
         <div className="flex items-center gap-3">
           <CalendarIcon className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-bold text-foreground">
-            {format(currentDate, viewMode === 'month' ? 'MMMM yyyy' : 'dd MMMM yyyy', { locale })}
-          </h2>
+          <h2 className="text-lg font-bold text-foreground">{headerTitle}</h2>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex bg-muted rounded-lg p-1">
@@ -134,7 +148,7 @@ export function DashboardCalendar() {
               {monthDays.map(day => {
                 const daySessions = getSessionsForDate(day);
                 return (
-                  <div key={day.toISOString()} className={`aspect-square flex flex-col items-center justify-center rounded-lg text-sm cursor-pointer transition-colors relative ${isToday(day) ? 'bg-primary text-primary-foreground font-bold' : isSameDay(day, currentDate) ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'}`}>
+                  <div key={day.toISOString()} onClick={() => { setCurrentDate(day); setViewMode('day'); }} className={`aspect-square flex flex-col items-center justify-center rounded-lg text-sm cursor-pointer transition-colors relative ${isToday(day) ? 'bg-primary text-primary-foreground font-bold' : isSameDay(day, currentDate) ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'}`}>
                     {format(day, 'd')}
                     {daySessions.length > 0 && <div className="w-1.5 h-1.5 rounded-full bg-primary absolute bottom-1" />}
                   </div>
@@ -148,7 +162,7 @@ export function DashboardCalendar() {
               <div className="grid grid-cols-8 gap-1 mb-2">
                 <div />
                 {weekDays.map((day, i) => (
-                  <div key={day.toISOString()} className={`text-center py-2 rounded-lg ${isToday(day) ? 'bg-primary/10' : ''}`}>
+                  <div key={day.toISOString()} onClick={() => { setCurrentDate(day); setViewMode('day'); }} className={`text-center py-2 rounded-lg cursor-pointer hover:bg-muted/50 ${isToday(day) ? 'bg-primary/10' : ''}`}>
                     <div className="text-xs text-muted-foreground">{dayNames[i]}</div>
                     <div className={`text-lg font-bold ${isToday(day) ? 'text-primary' : 'text-foreground'}`}>{format(day, 'd')}</div>
                   </div>
@@ -187,7 +201,7 @@ export function DashboardCalendar() {
                     {cellSessions.map((session: any) => (
                       <div key={session.id} draggable onDragStart={e => handleDragStart(e, session)} className={`${session.color || 'bg-primary/20 text-primary border-primary/30'} border rounded-lg p-3 cursor-grab active:cursor-grabbing`}>
                         <div className="font-semibold">{session.title}</div>
-                        <div className="text-sm opacity-70">{session.start_time?.slice(0, 5)}</div>
+                        <div className="text-sm opacity-70">{session.start_time?.slice(0, 5)}{session.end_time ? ` - ${session.end_time?.slice(0, 5)}` : ''}</div>
                       </div>
                     ))}
                   </div>
