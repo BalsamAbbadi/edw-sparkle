@@ -24,40 +24,77 @@ const quotes = {
     '﴿ ادْعُونِي أَسْتَجِبْ لَكُمْ ﴾',
     '﴿ لَا تَحْزَنْ إِنَّ اللَّهَ مَعَنَا ﴾',
     '﴿ وَنُنَزِّلُ مِنَ الْقُرْآنِ مَا هُوَ شِفَاءٌ وَرَحْمَةٌ لِّلْمُؤْمِنِينَ ﴾',
+    '﴿ وَلَا تَيْأَسُوا مِن رَّوْحِ اللَّهِ ﴾',
+    '﴿ إِنَّ اللَّهَ لَا يُغَيِّرُ مَا بِقَوْمٍ حَتَّىٰ يُغَيِّرُوا مَا بِأَنفُسِهِمْ ﴾',
+    '﴿ وَإِذَا سَأَلَكَ عِبَادِي عَنِّي فَإِنِّي قَرِيبٌ ﴾',
+    '﴿ فَاذْكُرُونِي أَذْكُرْكُمْ ﴾',
+    '﴿ وَبَشِّرِ الصَّابِرِينَ ﴾',
+    '﴿ سَيَجْعَلُ اللَّهُ بَعْدَ عُسْرٍ يُسْرًا ﴾',
+    '﴿ وَلَقَدْ يَسَّرْنَا الْقُرْآنَ لِلذِّكْرِ فَهَلْ مِن مُّدَّكِرٍ ﴾',
+    '﴿ رَبَّنَا هَبْ لَنَا مِنْ أَزْوَاجِنَا وَذُرِّيَّاتِنَا قُرَّةَ أَعْيُنٍ ﴾',
+    '﴿ وَتَعَاوَنُوا عَلَى الْبِرِّ وَالتَّقْوَىٰ ﴾',
+    '﴿ إِنَّمَا الْمُؤْمِنُونَ إِخْوَةٌ ﴾',
+    '﴿ وَاعْتَصِمُوا بِحَبْلِ اللَّهِ جَمِيعًا وَلَا تَفَرَّقُوا ﴾',
+    '﴿ وَقُولُوا لِلنَّاسِ حُسْنًا ﴾',
+    '﴿ إِنَّ أَكْرَمَكُمْ عِندَ اللَّهِ أَتْقَاكُمْ ﴾',
+    '﴿ وَلَا تَمْشِ فِي الْأَرْضِ مَرَحًا ﴾',
+    '﴿ وَاخْفِضْ جَنَاحَكَ لِلْمُؤْمِنِينَ ﴾',
+    '﴿ فَبِمَا رَحْمَةٍ مِّنَ اللَّهِ لِنتَ لَهُمْ ﴾',
+    '﴿ خُذِ الْعَفْوَ وَأْمُرْ بِالْعُرْفِ ﴾',
+    '﴿ وَجَعَلْنَا مِنَ الْمَاءِ كُلَّ شَيْءٍ حَيٍّ ﴾',
+    '﴿ وَفِي أَنفُسِكُمْ أَفَلَا تُبْصِرُونَ ﴾',
+    '﴿ فَتَبَارَكَ اللَّهُ أَحْسَنُ الْخَالِقِينَ ﴾',
+    '﴿ وَكَفَىٰ بِاللَّهِ وَكِيلًا ﴾',
+    '﴿ حَسْبُنَا اللَّهُ وَنِعْمَ الْوَكِيلُ ﴾',
+    '﴿ أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ ﴾',
+    '﴿ وَمَا تَوْفِيقِي إِلَّا بِاللَّهِ عَلَيْهِ تَوَكَّلْتُ وَإِلَيْهِ أُنِيبُ ﴾',
+    '﴿ رَبِّ أَوْزِعْنِي أَنْ أَشْكُرَ نِعْمَتَكَ الَّتِي أَنْعَمْتَ عَلَيَّ ﴾',
     'مَن طَلَبَ العُلا سَهِرَ اللّيالي — المتنبي',
-    'أنا الذي نظر الأعمى إلى أدبي — المتنبي',
     'إذا غامَرتَ في شَرَفٍ مَرومٍ فلا تَقنَع بما دونَ النجومِ — المتنبي',
     'على قَدرِ أَهلِ العَزمِ تأتي العَزائِمُ — المتنبي',
     'تعلّمْ فليسَ المرءُ يُولَدُ عالماً — علي بن أبي طالب',
-    'خيرُ جليسٍ في الزمانِ كتابُ — أبو الطيب المتنبي',
+    'خيرُ جليسٍ في الزمانِ كتابُ — المتنبي',
     'العلمُ نورٌ والجهلُ ظلامٌ',
     'كُن عالماً أو متعلماً ولا تكن إمَّعةً',
     'إذا لم تزد شيئاً على الدنيا كنتَ زائداً عليها',
-    'لا يُدرِكُ الحكمةَ مَن لا يتعلّمها',
     'ليس الجمالُ بأثوابٍ تُزَيِّنُنا إنّ الجمالَ جمالُ العلمِ والأدبِ',
     'العلمُ في الصِّغَرِ كالنّقشِ في الحَجَرِ',
     'مَن جدّ وجد ومَن زرع حصد',
-    'صبرُ قليلٍ يُمحى ألمَ طويلٍ',
     'الصبرُ مفتاحُ الفَرَجِ',
+    'أعزُّ مكانٍ في الدُّنى سرجُ سابحٍ وخيرُ جليسٍ في الزمانِ كتابُ — المتنبي',
+    'لا تؤجّل عمل اليوم إلى الغد',
+    'ما ضاع حقٌّ وراءه مُطالب',
+    'مَن سار على الدرب وصل',
+    'الحكمة ضالة المؤمن',
+    'رُبّ همّةٍ أحيت أمّة',
+    'في التأنّي السلامة وفي العجلة الندامة',
+    'لكلِّ مقامٍ مقال',
   ],
   en: [
     '"Read in the name of your Lord who created." — Quran 96:1',
     '"And say: My Lord, increase me in knowledge." — Quran 20:114',
     '"Indeed, with hardship comes ease." — Quran 94:6',
     '"Whoever fears Allah, He will make a way out for him." — Quran 65:2',
+    '"And whoever relies upon Allah — then He is sufficient for him." — Quran 65:3',
+    '"Call upon Me; I will respond to you." — Quran 40:60',
+    '"Do not grieve; indeed Allah is with us." — Quran 9:40',
+    '"Unquestionably, by the remembrance of Allah hearts are assured." — Quran 13:28',
     '"He who seeks greatness must stay up through the nights." — Al-Mutanabbi',
     '"If you aspire to noble heights, don\'t settle for less than the stars." — Al-Mutanabbi',
     '"Knowledge is light, and ignorance is darkness."',
     '"Be a scholar or a learner, but never indifferent."',
     '"Patience is the key to relief."',
     '"Whoever strives shall find."',
+    '"A determined will can revive a nation."',
   ],
 };
 
 export function WelcomeScreen({ onClose }: WelcomeScreenProps) {
   const { t, lang } = useLanguage();
   const quoteList = lang === 'ar' ? quotes.ar : quotes.en;
-  const randomQuote = useMemo(() => quoteList[Math.floor(Math.random() * quoteList.length)], []);
+  // Use date-based index to avoid same quote on same day
+  const dayIndex = new Date().getDate() + new Date().getMonth() * 31;
+  const randomQuote = useMemo(() => quoteList[dayIndex % quoteList.length], []);
 
   return (
     <AnimatePresence>
@@ -65,14 +102,14 @@ export function WelcomeScreen({ onClose }: WelcomeScreenProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-primary/90 via-primary to-secondary/80"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-primary/90 via-primary to-secondary/80 backdrop-blur-lg"
       >
         <button onClick={onClose} className="absolute top-6 left-6 text-primary-foreground/80 hover:text-primary-foreground transition-colors">
           <X className="w-8 h-8" />
         </button>
         <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, type: 'spring', stiffness: 100 }} className="text-center px-8 max-w-2xl">
           <motion.div animate={{ y: [0, -8, 0] }} transition={{ repeat: Infinity, duration: 3 }}>
-            <Sparkles className="w-16 h-16 text-accent mx-auto mb-6" />
+            <img src="/logo.png" alt="إبداع" className="w-20 h-20 mx-auto mb-6 drop-shadow-2xl" />
           </motion.div>
           <h1 className="text-5xl md:text-6xl font-bold text-primary-foreground mb-6 font-heading">{t('إبداع', 'Ibdaa')}</h1>
           <p className="text-xl md:text-2xl text-primary-foreground/90 mb-8 leading-relaxed">{randomQuote}</p>
