@@ -73,21 +73,21 @@ export default function ProfilePage() {
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto space-y-6">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl mx-auto space-y-6">
       {/* Cover / Header */}
-      <div className="relative rounded-2xl overflow-hidden">
-        <div className="h-40 bg-gradient-to-br from-primary via-primary/80 to-secondary" />
-        <div className="absolute -bottom-16 start-6">
+      <div className="relative rounded-2xl overflow-hidden shadow-lg">
+        <div className="h-48 bg-gradient-to-br from-primary via-primary/80 to-accent/60" />
+        <div className="absolute -bottom-20 start-8">
           <label className="relative cursor-pointer group">
-            <div className="w-32 h-32 rounded-full bg-card flex items-center justify-center overflow-hidden border-4 border-card shadow-xl">
+            <div className="w-40 h-40 rounded-full bg-card flex items-center justify-center overflow-hidden border-4 border-card shadow-2xl ring-4 ring-primary/20">
               {profile?.avatar_url ? (
                 <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
-                <User className="w-14 h-14 text-primary" />
+                <User className="w-20 h-20 text-primary/40" />
               )}
             </div>
             <div className="absolute inset-0 flex items-center justify-center rounded-full bg-foreground/30 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Camera className="w-8 h-8 text-primary-foreground" />
+              <Camera className="w-10 h-10 text-primary-foreground" />
             </div>
             <input type="file" accept="image/*" className="hidden" onChange={uploadAvatar} />
           </label>
@@ -95,36 +95,36 @@ export default function ProfilePage() {
       </div>
 
       {/* Name & Status */}
-      <div className="pt-20 px-2">
+      <div className="pt-24 px-4">
         <h1 className="text-3xl font-bold text-foreground">{profile?.display_name || user?.email}</h1>
         {profile?.status_caption && <p className="text-muted-foreground mt-1 text-lg">{profile.status_caption}</p>}
-        <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
           <Mail className="w-4 h-4" />{user?.email}
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="glass-card rounded-xl p-5 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"><BookOpen className="w-5 h-5 text-primary" /></div>
-          <div><p className="text-2xl font-bold text-foreground">{courseCount}</p><p className="text-xs text-muted-foreground">{t('دورة', 'Courses')}</p></div>
+      <div className="grid grid-cols-2 gap-4 px-4">
+        <div className="glass-card rounded-xl p-5 flex items-center gap-3 bg-card/80 backdrop-blur-md border border-border/50">
+          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center"><BookOpen className="w-6 h-6 text-primary" /></div>
+          <div><p className="text-3xl font-bold text-foreground">{courseCount}</p><p className="text-xs text-muted-foreground">{t('دورة', 'Courses')}</p></div>
         </div>
-        <div className="glass-card rounded-xl p-5 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center"><Users className="w-5 h-5 text-secondary-foreground" /></div>
-          <div><p className="text-2xl font-bold text-foreground">{studentCount}</p><p className="text-xs text-muted-foreground">{t('طالب', 'Students')}</p></div>
+        <div className="glass-card rounded-xl p-5 flex items-center gap-3 bg-card/80 backdrop-blur-md border border-border/50">
+          <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center"><Users className="w-6 h-6 text-secondary-foreground" /></div>
+          <div><p className="text-3xl font-bold text-foreground">{studentCount}</p><p className="text-xs text-muted-foreground">{t('طالب', 'Students')}</p></div>
         </div>
       </div>
 
       {/* Bio */}
       {profile?.bio && (
-        <div className="glass-card rounded-xl p-5">
+        <div className="glass-card rounded-xl p-6 mx-4 bg-card/80 backdrop-blur-md border border-border/50">
           <h3 className="font-semibold text-foreground mb-2">{t('نبذة عني', 'About Me')}</h3>
-          <p className="text-muted-foreground whitespace-pre-wrap">{profile.bio}</p>
+          <p className="text-muted-foreground whitespace-pre-wrap leading-relaxed">{profile.bio}</p>
         </div>
       )}
 
       {/* Edit Form */}
-      <div className="glass-card rounded-2xl p-6 space-y-4">
+      <div className="glass-card rounded-2xl p-6 mx-4 space-y-4 bg-card/80 backdrop-blur-md border border-border/50">
         <h3 className="text-lg font-bold text-foreground">{t('تعديل الملف الشخصي', 'Edit Profile')}</h3>
         <div>
           <label className="text-sm font-medium text-foreground mb-1 block">{t('الاسم', 'Name')}</label>

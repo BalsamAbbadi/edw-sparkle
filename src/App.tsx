@@ -17,6 +17,7 @@ import Courses from "./pages/Courses";
 import CourseDetail from "./pages/CourseDetail";
 import Students from "./pages/Students";
 import Payments from "./pages/Payments";
+import Income from "./pages/Income";
 import Notes from "./pages/Notes";
 import Files from "./pages/Files";
 import Notifications from "./pages/Notifications";
@@ -58,6 +59,7 @@ function ProtectedRoutes() {
           <Route path="/courses/:id" element={<CourseDetail />} />
           <Route path="/students" element={<Students />} />
           <Route path="/payments" element={<Payments />} />
+          <Route path="/income" element={<Income />} />
           <Route path="/notes" element={<Notes />} />
           <Route path="/files" element={<Files />} />
           <Route path="/notifications" element={<Notifications />} />

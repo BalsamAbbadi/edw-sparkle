@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Plus, Edit2, Trash2, X, Clock, Users } from 'lucide-react';
+import { BookOpen, Plus, Edit2, Trash2, X, Clock, Users, Copy, Calendar as CalIcon } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { addWeeks, addDays, format } from 'date-fns';
+import { addWeeks, addDays, format, parse } from 'date-fns';
 
 interface CourseForm {
   title: string;
@@ -15,6 +15,8 @@ interface CourseForm {
   duration: string;
   fees: number;
   totalSessions: number;
+  startDate: string;
+  sessionColor: string;
   recurring_schedule: { day: number; startTime: string; endTime: string }[];
 }
 
@@ -28,13 +30,26 @@ const DAYS = [
   { value: 6, ar: 'السبت', en: 'Saturday' },
 ];
 
-const COLORS = [
+const SESSION_COLORS = [
   'bg-primary/20 text-primary border-primary/30',
   'bg-secondary text-secondary-foreground border-secondary-foreground/20',
   'bg-success/20 text-success border-success/30',
   'bg-warning/20 text-warning border-warning/30',
   'bg-accent text-accent-foreground border-accent-foreground/20',
+  'bg-pink-100 text-pink-700 border-pink-200',
+  'bg-cyan-100 text-cyan-700 border-cyan-200',
+  'bg-indigo-100 text-indigo-700 border-indigo-200',
+  'bg-rose-100 text-rose-700 border-rose-200',
+  'bg-teal-100 text-teal-700 border-teal-200',
+  'bg-amber-100 text-amber-700 border-amber-200',
+  'bg-emerald-100 text-emerald-700 border-emerald-200',
 ];
+
+const emptyForm: CourseForm = {
+  title: '', description: '', duration: '', fees: 0, totalSessions: 16,
+  startDate: format(new Date(), 'yyyy-MM-dd'), sessionColor: SESSION_COLORS[0],
+  recurring_schedule: []
+};
 
 export default function CoursesPage() {
   const { t, lang } = useLanguage();
@@ -43,7 +58,9 @@ export default function CoursesPage() {
   const navigate = useNavigate();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<CourseForm>({ title: '', description: '', duration: '', fees: 0, totalSessions: 16, recurring_schedule: [] });
+  const [form, setForm] = useState<CourseForm>(emptyForm);
+  const [showDuplicate, setShowDuplicate] = useState<any>(null);
+  const [dupStartDate, setDupStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   const { data: courses = [], isLoading } = useQuery({
     queryKey: ['courses'],
@@ -84,6 +101,31 @@ export default function CoursesPage() {
     enabled: !!user,
   });
 
+  const createSessions = async (courseId: string, courseTitle: string, schedule: any[], totalSessions: number, startDateStr: string, color: string) => {
+    if (schedule.length === 0) return;
+    const startDate = new Date(startDateStr);
+    const sessions: any[] = [];
+    let sessionCount = 0;
+    const sessionsPerWeek = schedule.length;
+    const totalWeeks = Math.ceil(totalSessions / sessionsPerWeek);
+
+    for (let week = 0; week < totalWeeks && sessionCount < totalSessions; week++) {
+      for (const slot of schedule) {
+        if (sessionCount >= totalSessions) break;
+        const currentDay = startDate.getDay();
+        const diff = (slot.day - currentDay + 7) % 7;
+        const sessionDate = addWeeks(addDays(startDate, diff), week);
+        if (sessionDate < startDate && week === 0) continue;
+        sessions.push({
+          course_id: courseId, user_id: user!.id, title: courseTitle,
+          session_date: format(sessionDate, 'yyyy-MM-dd'), start_time: slot.startTime, end_time: slot.endTime || null, color,
+        });
+        sessionCount++;
+      }
+    }
+    if (sessions.length > 0) await supabase.from('sessions').insert(sessions);
+  };
+
   const saveMutation = useMutation({
     mutationFn: async (formData: CourseForm) => {
       if (editingId) {
@@ -96,30 +138,7 @@ export default function CoursesPage() {
           user_id: user!.id, title: formData.title, description: formData.description, duration: formData.duration, fees: formData.fees, recurring_schedule: formData.recurring_schedule as any,
         }).select().single();
         if (error) throw error;
-
-        // Create sessions based on schedule and total sessions count
-        if (formData.recurring_schedule.length > 0) {
-          const sessionsPerWeek = formData.recurring_schedule.length;
-          const totalWeeks = Math.ceil(formData.totalSessions / sessionsPerWeek);
-          const sessions: any[] = [];
-          const colorIndex = Math.floor(Math.random() * COLORS.length);
-          let sessionCount = 0;
-          for (let week = 0; week < totalWeeks && sessionCount < formData.totalSessions; week++) {
-            for (const slot of formData.recurring_schedule) {
-              if (sessionCount >= formData.totalSessions) break;
-              const baseDate = new Date();
-              const currentDay = baseDate.getDay();
-              const diff = (slot.day - currentDay + 7) % 7;
-              const sessionDate = addWeeks(addDays(baseDate, diff === 0 && week === 0 ? 0 : diff), week);
-              sessions.push({
-                course_id: course.id, user_id: user!.id, title: formData.title,
-                session_date: format(sessionDate, 'yyyy-MM-dd'), start_time: slot.startTime, end_time: slot.endTime || null, color: COLORS[colorIndex],
-              });
-              sessionCount++;
-            }
-          }
-          if (sessions.length > 0) await supabase.from('sessions').insert(sessions);
-        }
+        await createSessions(course.id, formData.title, formData.recurring_schedule, formData.totalSessions, formData.startDate, formData.sessionColor);
       }
     },
     onSuccess: () => {
@@ -129,6 +148,27 @@ export default function CoursesPage() {
       resetForm();
     },
     onError: (e: any) => toast.error(e.message),
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: async ({ course, startDate }: { course: any; startDate: string }) => {
+      const { data: newCourse, error } = await supabase.from('courses').insert({
+        user_id: user!.id, title: `${course.title} (${t('نسخة', 'Copy')})`,
+        description: course.description, duration: course.duration, fees: course.fees,
+        recurring_schedule: course.recurring_schedule,
+      }).select().single();
+      if (error) throw error;
+      const schedule = (course.recurring_schedule as any[]) || [];
+      // Count original sessions
+      const { count } = await supabase.from('sessions').select('*', { count: 'exact', head: true }).eq('course_id', course.id);
+      await createSessions(newCourse.id, newCourse.title, schedule, count || 16, startDate, SESSION_COLORS[Math.floor(Math.random() * SESSION_COLORS.length)]);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['courses'] });
+      qc.invalidateQueries({ queryKey: ['sessions'] });
+      setShowDuplicate(null);
+      toast.success(t('تم نسخ الدورة', 'Course duplicated'));
+    },
   });
 
   const deleteMutation = useMutation({
@@ -144,12 +184,17 @@ export default function CoursesPage() {
 
   const resetForm = () => {
     setShowForm(false); setEditingId(null);
-    setForm({ title: '', description: '', duration: '', fees: 0, totalSessions: 16, recurring_schedule: [] });
+    setForm(emptyForm);
   };
 
   const startEdit = (course: any) => {
     setEditingId(course.id);
-    setForm({ title: course.title, description: course.description || '', duration: course.duration || '', fees: course.fees || 0, totalSessions: 16, recurring_schedule: (course.recurring_schedule as any[]) || [] });
+    setForm({
+      title: course.title, description: course.description || '', duration: course.duration || '',
+      fees: course.fees || 0, totalSessions: 16, startDate: format(new Date(), 'yyyy-MM-dd'),
+      sessionColor: SESSION_COLORS[0],
+      recurring_schedule: (course.recurring_schedule as any[]) || [],
+    });
     setShowForm(true);
   };
 
@@ -165,9 +210,9 @@ export default function CoursesPage() {
     return (
       <div className="flex items-center gap-2 mt-2">
         <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden flex">
-          {stats.full > 0 && <div className="bg-success h-full" style={{ width: `${(stats.full / total) * 100}%` }} />}
-          {stats.partial > 0 && <div className="bg-warning h-full" style={{ width: `${(stats.partial / total) * 100}%` }} />}
-          {stats.unpaid > 0 && <div className="bg-destructive h-full" style={{ width: `${(stats.unpaid / total) * 100}%` }} />}
+          {stats.full > 0 && <div className="bg-success h-full transition-all" style={{ width: `${(stats.full / total) * 100}%` }} />}
+          {stats.partial > 0 && <div className="bg-warning h-full transition-all" style={{ width: `${(stats.partial / total) * 100}%` }} />}
+          {stats.unpaid > 0 && <div className="bg-destructive h-full transition-all" style={{ width: `${(stats.unpaid / total) * 100}%` }} />}
         </div>
         <div className="flex gap-1.5 text-[10px]">
           <span className="text-success">{stats.full}</span>
@@ -206,29 +251,50 @@ export default function CoursesPage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1 block">{t('الوصف', 'Description')}</label>
-                  <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none resize-none" />
+                  <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none resize-none" />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1 block">{t('المدة', 'Duration')}</label>
                     <input value={form.duration} onChange={e => setForm(f => ({ ...f, duration: e.target.value }))} placeholder={t('3 أشهر', '3 months')} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
                   </div>
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1 block">{t('الرسوم (₪)', 'Fees (₪)')}</label>
-                    <input type="number" value={form.fees} onChange={e => setForm(f => ({ ...f, fees: Number(e.target.value) }))} min={0} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1 block">{t('عدد الحصص', 'Total Sessions')}</label>
-                    <input type="number" value={form.totalSessions} onChange={e => setForm(f => ({ ...f, totalSessions: Number(e.target.value) }))} min={1} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
+                    <input type="number" value={form.fees || ''} onChange={e => setForm(f => ({ ...f, fees: Number(e.target.value) }))} min={0} placeholder="0" className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
                   </div>
                 </div>
+
+                {!editingId && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-sm font-medium text-foreground mb-1 block">{t('تاريخ بداية الدورة', 'Start Date')}</label>
+                        <input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-foreground mb-1 block">{t('عدد الحصص', 'Total Sessions')}</label>
+                        <input type="number" value={form.totalSessions} onChange={e => setForm(f => ({ ...f, totalSessions: Number(e.target.value) }))} min={1} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-2 block">{t('لون الحصص', 'Session Color')}</label>
+                      <div className="flex flex-wrap gap-2">
+                        {SESSION_COLORS.map((c, i) => (
+                          <button key={i} type="button" onClick={() => setForm(f => ({ ...f, sessionColor: c }))}
+                            className={`w-8 h-8 rounded-lg border-2 transition-all ${c.split(' ')[0]} ${form.sessionColor === c ? 'border-primary scale-110 ring-2 ring-primary/30' : 'border-transparent'}`} />
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-medium text-foreground">{t('مواعيد الحصص الأسبوعية', 'Weekly Schedule')}</label>
                     <button type="button" onClick={addScheduleSlot} className="text-xs text-primary hover:underline">{t('+ إضافة موعد', '+ Add slot')}</button>
                   </div>
-                  {form.recurring_schedule.length === 0 && <p className="text-xs text-muted-foreground">{t('أضف الأيام والأوقات لكل حصة أسبوعية', 'Add days and times for each weekly session')}</p>}
+                  {form.recurring_schedule.length === 0 && <p className="text-xs text-muted-foreground">{t('أضف الأيام والأوقات', 'Add days and times')}</p>}
                   {form.recurring_schedule.map((slot, idx) => (
                     <div key={idx} className="flex items-center gap-2 mb-2">
                       <select value={slot.day} onChange={e => updateScheduleSlot(idx, 'day', e.target.value)} className="px-2 py-1.5 rounded-lg border border-input bg-background text-foreground text-sm flex-1">
@@ -251,13 +317,35 @@ export default function CoursesPage() {
         )}
       </AnimatePresence>
 
+      {/* Duplicate Modal */}
+      <AnimatePresence>
+        {showDuplicate && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 backdrop-blur-sm p-4">
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-sm bg-card rounded-2xl shadow-xl border border-border p-6 space-y-4">
+              <h3 className="text-lg font-bold">{t('نسخ الدورة', 'Duplicate Course')}</h3>
+              <p className="text-sm text-muted-foreground">{showDuplicate.title}</p>
+              <div>
+                <label className="text-sm font-medium mb-1 block">{t('تاريخ بداية الدورة الجديدة', 'New course start date')}</label>
+                <input type="date" value={dupStartDate} onChange={e => setDupStartDate(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground" />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => duplicateMutation.mutate({ course: showDuplicate, startDate: dupStartDate })} disabled={duplicateMutation.isPending} className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground font-medium disabled:opacity-50">
+                  {t('نسخ', 'Duplicate')}
+                </button>
+                <button onClick={() => setShowDuplicate(null)} className="px-4 py-2 rounded-lg bg-muted text-foreground">{t('إلغاء', 'Cancel')}</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Courses Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{[1, 2, 3].map(i => <div key={i} className="glass-card rounded-xl p-6 animate-pulse h-48" />)}</div>
       ) : courses.length === 0 ? (
         <div className="glass-card rounded-xl p-12 text-center">
           <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">{t('لا توجد دورات بعد. أنشئ دورتك الأولى!', 'No courses yet. Create your first one!')}</p>
+          <p className="text-muted-foreground">{t('لا توجد دورات بعد. أنشئ دورتك الأولى!', 'No courses yet!')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -265,13 +353,14 @@ export default function CoursesPage() {
             const studentNum = enrollmentCounts[course.id] || 0;
             const pStats = paymentsByCourse[course.id] || { full: 0, partial: 0, unpaid: 0 };
             return (
-              <motion.div key={course.id} whileHover={{ y: -3 }} className="glass-card rounded-2xl overflow-hidden cursor-pointer group" onClick={() => navigate(`/courses/${course.id}`)}>
+              <motion.div key={course.id} whileHover={{ y: -3 }} className="glass-card rounded-2xl overflow-hidden cursor-pointer group bg-card/80 backdrop-blur-md border border-border/50" onClick={() => navigate(`/courses/${course.id}`)}>
                 <div className="p-5">
                   <div className="flex items-start justify-between mb-3">
                     <h3 className="text-lg font-bold text-foreground">{course.title}</h3>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => { setShowDuplicate(course); setDupStartDate(format(new Date(), 'yyyy-MM-dd')); }} className="p-1.5 rounded-lg hover:bg-muted" title={t('نسخ', 'Duplicate')}><Copy className="w-4 h-4 text-muted-foreground" /></button>
                       <button onClick={() => startEdit(course)} className="p-1.5 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4 text-muted-foreground" /></button>
-                      <button onClick={() => { if (confirm(t('هل أنت متأكد من الحذف؟', 'Are you sure?'))) deleteMutation.mutate(course.id); }} className="p-1.5 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                      <button onClick={() => { if (window.confirm(t('حذف الدورة؟', 'Delete course?'))) deleteMutation.mutate(course.id); }} className="p-1.5 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
                     </div>
                   </div>
                   {course.description && <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{course.description}</p>}

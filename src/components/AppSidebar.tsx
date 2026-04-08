@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   BookOpen, Users, CreditCard, Calendar, Bell, StickyNote,
-  Settings, User, Home, FolderOpen, Bot, Sparkles
+  Settings, User, Home, FolderOpen, Bot, Sparkles, DollarSign
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -17,6 +17,7 @@ const navItems = [
   { icon: BookOpen, titleAr: 'الدورات', titleEn: 'Courses', url: '/courses' },
   { icon: Users, titleAr: 'الطلاب', titleEn: 'Students', url: '/students' },
   { icon: CreditCard, titleAr: 'المدفوعات', titleEn: 'Payments', url: '/payments' },
+  { icon: DollarSign, titleAr: 'الدخل', titleEn: 'Income', url: '/income' },
   { icon: StickyNote, titleAr: 'الملاحظات', titleEn: 'Notes', url: '/notes' },
   { icon: FolderOpen, titleAr: 'الملفات', titleEn: 'Files', url: '/files' },
   { icon: Bell, titleAr: 'الإشعارات', titleEn: 'Notifications', url: '/notifications' },
@@ -37,8 +38,8 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" side="right">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shrink-0">
-            <Sparkles className="w-5 h-5 text-primary-foreground" />
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shrink-0 shadow-lg">
+            <img src="/logo.png" alt="إبداع" className="w-7 h-7 object-contain" />
           </div>
           {!collapsed && (
             <span className="text-xl font-bold text-foreground font-heading">
@@ -58,7 +59,7 @@ export function AppSidebar() {
                     <NavLink
                       to={item.url}
                       end={item.url === '/'}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors hover:bg-sidebar-accent"
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all hover:bg-sidebar-accent"
                       activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
                     >
                       <item.icon className="w-5 h-5 shrink-0" />
@@ -81,7 +82,7 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild>
                     <NavLink
                       to={item.url}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors hover:bg-sidebar-accent"
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all hover:bg-sidebar-accent"
                       activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
                     >
                       <item.icon className="w-5 h-5 shrink-0" />
