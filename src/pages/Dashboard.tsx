@@ -1,11 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Users, BookOpen, CreditCard, TrendingUp } from 'lucide-react';
+import { Users, BookOpen, CreditCard, TrendingUp, CalendarDays } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { DashboardCalendar } from '@/components/DashboardCalendar';
+import { format, isToday } from 'date-fns';
 
 export default function Dashboard() {
   const { t } = useLanguage();
@@ -54,7 +55,25 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
+  const { data: todaySessions = [] } = useQuery({
+    queryKey: ['today-sessions'],
+    queryFn: async () => {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const { data, error } = await supabase.from('sessions').select('*, courses(title)').eq('session_date', today).order('start_time', { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
   const displayName = profile?.display_name || user?.email?.split('@')[0] || '';
+
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMin = now.getMinutes();
+  const currentTimeStr = `${String(currentHour).padStart(2, '0')}:${String(currentMin).padStart(2, '0')}`;
+  const remainingSessions = todaySessions.filter((s: any) => (s.end_time || s.start_time) > currentTimeStr);
+  const completedSessions = todaySessions.length - remainingSessions.length;
 
   const stats = [
     { icon: Users, label: t('إجمالي الطلاب', 'Total Students'), value: String(studentCount), color: 'text-primary', bgColor: 'bg-primary/10' },
@@ -87,6 +106,41 @@ export default function Dashboard() {
           </motion.div>
         ))}
       </div>
+
+      {/* Today's Sessions Summary */}
+      {todaySessions.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card rounded-2xl p-5 bg-card/80 backdrop-blur-md border border-border/50">
+          <div className="flex items-center gap-3 mb-3">
+            <CalendarDays className="w-5 h-5 text-primary" />
+            <h3 className="font-bold text-foreground">
+              {t(`لديك ${todaySessions.length} حصص اليوم`, `You have ${todaySessions.length} sessions today`)}
+              {completedSessions > 0 && (
+                <span className="text-sm text-muted-foreground font-normal ms-2">
+                  ({t(`أنهيت ${completedSessions} حصة`, `${completedSessions} completed`)})
+                </span>
+              )}
+            </h3>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {todaySessions.map((s: any) => {
+              const isPast = (s.end_time || s.start_time) < currentTimeStr;
+              return (
+                <div key={s.id} className={`shrink-0 rounded-xl px-4 py-2.5 border text-sm ${isPast ? 'bg-muted/50 border-border/30 text-muted-foreground line-through' : `${s.color || 'bg-primary/10 border-primary/20 text-primary'}`}`}>
+                  <p className="font-semibold">{s.title}</p>
+                  <p className="text-xs opacity-70">{s.start_time?.slice(0, 5)}{s.end_time ? ` - ${s.end_time?.slice(0, 5)}` : ''}</p>
+                </div>
+              );
+            })}
+          </div>
+          {remainingSessions.length > 0 ? (
+            <p className="text-sm text-primary mt-2 font-medium">
+              {t(`تبقى لديك ${remainingSessions.length} حصة`, `${remainingSessions.length} sessions remaining`)}
+            </p>
+          ) : (
+            <p className="text-sm text-success mt-2 font-medium">{t('🎉 أنهيت جميع حصصك اليوم!', '🎉 All sessions completed!')}</p>
+          )}
+        </motion.div>
+      )}
 
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
         <DashboardCalendar />

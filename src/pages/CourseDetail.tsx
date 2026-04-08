@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Users, StickyNote, FolderOpen, Calendar, ArrowRight, Plus, X, Trash2, Upload, Download, Edit2, Check, ExternalLink, Phone } from 'lucide-react';
+import { BookOpen, Users, StickyNote, FolderOpen, Calendar, ArrowRight, Plus, X, Trash2, Upload, Download, Edit2, Check, ExternalLink, Phone, CheckSquare } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,6 +9,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { format, addDays } from 'date-fns';
 import { ar } from 'date-fns/locale';
+
+const TEXT_COLORS = [
+  { label: 'أسود', value: '#1a1a1a' },
+  { label: 'أحمر', value: '#dc2626' },
+  { label: 'أزرق', value: '#2563eb' },
+  { label: 'أخضر', value: '#16a34a' },
+  { label: 'بنفسجي', value: '#9333ea' },
+  { label: 'برتقالي', value: '#ea580c' },
+];
+
+const PAPER_COLORS = ['#FEF3C7', '#DBEAFE', '#F3E8FF', '#DCFCE7', '#FFE4E6'];
 
 export default function CourseDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -19,12 +30,17 @@ export default function CourseDetailPage() {
   const [tab, setTab] = useState<'students' | 'notes' | 'files' | 'schedule'>('students');
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [studentForm, setStudentForm] = useState({ name: '', grade: '', gender: '', notes: '', phone: '' });
-  const [noteForm, setNoteForm] = useState({ title: '', content: '' });
   const [showAddNote, setShowAddNote] = useState(false);
+  const [noteForm, setNoteForm] = useState({ title: '', content: '', color: '#FEF3C7', is_checklist: false });
+  const [selectedTextColor, setSelectedTextColor] = useState('#1a1a1a');
+  const noteContentRef = useRef<HTMLDivElement>(null);
   const [editPaymentId, setEditPaymentId] = useState<string | null>(null);
   const [editPaymentAmount, setEditPaymentAmount] = useState(0);
   const [editSessionId, setEditSessionId] = useState<string | null>(null);
   const [editSessionForm, setEditSessionForm] = useState({ session_date: '', start_time: '', end_time: '' });
+  const [editStudentId, setEditStudentId] = useState<string | null>(null);
+  const [editStudentForm, setEditStudentForm] = useState({ name: '', grade: '', gender: '', notes: '', phone: '' });
+  const [expandedNote, setExpandedNote] = useState<string | null>(null);
 
   const { data: course } = useQuery({
     queryKey: ['course', id],
@@ -86,6 +102,7 @@ export default function CourseDetailPage() {
     enabled: !!id && !!user,
   });
 
+  // Mutations
   const addStudentMutation = useMutation({
     mutationFn: async () => {
       let studentId: string;
@@ -128,6 +145,21 @@ export default function CourseDetailPage() {
     },
   });
 
+  const updateStudentMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from('students').update({
+        name: editStudentForm.name, grade: editStudentForm.grade, gender: editStudentForm.gender, notes: editStudentForm.notes, phone: editStudentForm.phone,
+      }).eq('id', editStudentId!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['enrollments', id] });
+      qc.invalidateQueries({ queryKey: ['students'] });
+      toast.success(t('تم تحديث بيانات الطالب', 'Student updated'));
+      setEditStudentId(null);
+    },
+  });
+
   const updatePaymentMutation = useMutation({
     mutationFn: async ({ payId, amount }: { payId: string; amount: number }) => {
       const { error } = await supabase.from('payments').update({ amount_paid: amount }).eq('id', payId);
@@ -143,15 +175,18 @@ export default function CourseDetailPage() {
 
   const addNoteMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from('notes').insert({ user_id: user!.id, course_id: id!, title: noteForm.title, content: noteForm.content });
+      const contentHtml = noteContentRef.current?.innerHTML || noteForm.content;
+      const { error } = await supabase.from('notes').insert({
+        user_id: user!.id, course_id: id!, title: noteForm.title, content: contentHtml, color: noteForm.color, is_checklist: noteForm.is_checklist,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['course-notes', id] });
-      qc.invalidateQueries({ queryKey: ['general-notes'] });
+      qc.invalidateQueries({ queryKey: ['all-notes'] });
       toast.success(t('تمت إضافة الملاحظة', 'Note added'));
       setShowAddNote(false);
-      setNoteForm({ title: '', content: '' });
+      setNoteForm({ title: '', content: '', color: '#FEF3C7', is_checklist: false });
     },
   });
 
@@ -160,7 +195,10 @@ export default function CourseDetailPage() {
       const { error } = await supabase.from('notes').delete().eq('id', noteId);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['course-notes', id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['course-notes', id] });
+      qc.invalidateQueries({ queryKey: ['all-notes'] });
+    },
   });
 
   const uploadFileMutation = useMutation({
@@ -178,7 +216,6 @@ export default function CourseDetailPage() {
       qc.invalidateQueries({ queryKey: ['course-files', id] });
       toast.success(t('تم رفع الملف', 'File uploaded'));
     },
-    onError: (e: any) => toast.error(e.message),
   });
 
   const deleteFileMutation = useMutation({
@@ -218,10 +255,7 @@ export default function CourseDetailPage() {
 
   const postponeSessionMutation = useMutation({
     mutationFn: async (sessionId: string) => {
-      const session = sessions.find((s: any) => s.id === sessionId);
-      if (!session) return;
       const idx = sessions.findIndex((s: any) => s.id === sessionId);
-      // Shift this and all subsequent sessions by 7 days
       const sessionsToShift = sessions.slice(idx);
       for (const s of sessionsToShift) {
         const newDate = format(addDays(new Date(s.session_date), 7), 'yyyy-MM-dd');
@@ -231,7 +265,7 @@ export default function CourseDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['course-sessions', id] });
       qc.invalidateQueries({ queryKey: ['sessions'] });
-      toast.success(t('تم تأجيل الحصة وإزاحة باقي الحصص', 'Session postponed, remaining sessions shifted'));
+      toast.success(t('تم تأجيل الحصة وإزاحة باقي الحصص', 'Session postponed'));
     },
   });
 
@@ -259,6 +293,19 @@ export default function CourseDetailPage() {
     return t('غير مدفوع', 'Unpaid');
   };
 
+  const applyNoteColor = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      document.execCommand('foreColor', false, selectedTextColor);
+    }
+  };
+
+  const insertChecklist = () => {
+    if (noteContentRef.current) {
+      document.execCommand('insertHTML', false, '<div class="checklist-item">☐ </div>');
+    }
+  };
+
   if (!course) return <div className="p-8 text-center text-muted-foreground">{t('جاري التحميل...', 'Loading...')}</div>;
 
   const tabs = [
@@ -284,7 +331,7 @@ export default function CourseDetailPage() {
         </div>
       </div>
 
-      <div className="flex gap-2 bg-muted rounded-lg p-1 overflow-x-auto">
+      <div className="flex gap-2 bg-muted/50 backdrop-blur-sm rounded-lg p-1 overflow-x-auto">
         {tabs.map(tb => (
           <button key={tb.key} onClick={() => setTab(tb.key)} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${tab === tb.key ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
             <tb.icon className="w-4 h-4" />{tb.label} <span className="text-xs opacity-70">({tb.count})</span>
@@ -292,7 +339,7 @@ export default function CourseDetailPage() {
         ))}
       </div>
 
-      {/* Students */}
+      {/* Students Tab */}
       {tab === 'students' && (
         <div className="space-y-4">
           <button onClick={() => setShowAddStudent(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">
@@ -322,6 +369,33 @@ export default function CourseDetailPage() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Edit Student Modal */}
+          <AnimatePresence>
+            {editStudentId && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 backdrop-blur-sm p-4">
+                <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-md bg-card rounded-2xl shadow-xl border border-border p-6 space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-bold">{t('تعديل بيانات الطالب', 'Edit Student')}</h3>
+                    <button onClick={() => setEditStudentId(null)}><X className="w-5 h-5" /></button>
+                  </div>
+                  <input value={editStudentForm.name} onChange={e => setEditStudentForm(f => ({ ...f, name: e.target.value }))} placeholder={t('الاسم', 'Name')} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm" />
+                  <input value={editStudentForm.phone} onChange={e => setEditStudentForm(f => ({ ...f, phone: e.target.value }))} placeholder={t('الهاتف', 'Phone')} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm" />
+                  <input value={editStudentForm.grade} onChange={e => setEditStudentForm(f => ({ ...f, grade: e.target.value }))} placeholder={t('الصف', 'Grade')} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm" />
+                  <select value={editStudentForm.gender} onChange={e => setEditStudentForm(f => ({ ...f, gender: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm">
+                    <option value="">{t('الجنس', 'Gender')}</option>
+                    <option value="male">{t('ذكر', 'Male')}</option>
+                    <option value="female">{t('أنثى', 'Female')}</option>
+                  </select>
+                  <textarea value={editStudentForm.notes} onChange={e => setEditStudentForm(f => ({ ...f, notes: e.target.value }))} placeholder={t('ملاحظات', 'Notes')} rows={2} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm resize-none" />
+                  <button onClick={() => updateStudentMutation.mutate()} disabled={!editStudentForm.name} className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold disabled:opacity-50">
+                    {t('حفظ', 'Save')}
+                  </button>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <div className="space-y-2">
             {enrollments.map((enr: any) => {
               const payment = getPaymentForStudent(enr.student_id);
@@ -351,18 +425,19 @@ export default function CourseDetailPage() {
                           <Edit2 className="w-3 h-3 text-muted-foreground" />
                         </button>
                       ) : null}
-                      <button onClick={() => removeStudentMutation.mutate(enr.id)} className="p-2 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                      <button onClick={() => { setEditStudentId(enr.student_id); setEditStudentForm({ name: enr.students?.name || '', grade: enr.students?.grade || '', gender: enr.students?.gender || '', notes: enr.students?.notes || '', phone: enr.students?.phone || '' }); }} className="p-2 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4 text-muted-foreground" /></button>
+                      <button onClick={() => { if (window.confirm(t('إزالة الطالب؟', 'Remove?'))) removeStudentMutation.mutate(enr.id); }} className="p-2 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
                     </div>
                   </div>
                 </div>
               );
             })}
-            {enrollments.length === 0 && <p className="text-center text-muted-foreground py-8">{t('لا يوجد طلاب في هذه الدورة', 'No students')}</p>}
+            {enrollments.length === 0 && <p className="text-center text-muted-foreground py-8">{t('لا يوجد طلاب', 'No students')}</p>}
           </div>
         </div>
       )}
 
-      {/* Schedule */}
+      {/* Schedule Tab */}
       {tab === 'schedule' && (
         <div className="space-y-2">
           {sessions.map((s: any, idx: number) => (
@@ -382,17 +457,15 @@ export default function CourseDetailPage() {
               ) : (
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-foreground">{t('حصة', 'Session')} #{idx + 1} - {s.title}</p>
+                    <p className="font-medium text-foreground">{t('حصة', 'Session')} #{idx + 1}</p>
                     <p className="text-sm text-muted-foreground">
                       {format(new Date(s.session_date), 'EEEE dd/MM/yyyy', { locale: lang === 'ar' ? ar : undefined })} • {s.start_time?.slice(0, 5)}{s.end_time ? ` - ${s.end_time?.slice(0, 5)}` : ''}
                     </p>
                   </div>
                   <div className="flex gap-1">
-                    <button onClick={() => { setEditSessionId(s.id); setEditSessionForm({ session_date: s.session_date, start_time: s.start_time, end_time: s.end_time || '' }); }} className="p-2 rounded-lg hover:bg-muted" title={t('تعديل', 'Edit')}><Edit2 className="w-4 h-4 text-muted-foreground" /></button>
-                    <button onClick={() => { if (confirm(t('تأجيل هذه الحصة وإزاحة الباقي أسبوع؟', 'Postpone and shift remaining?'))) postponeSessionMutation.mutate(s.id); }} className="p-2 rounded-lg hover:bg-warning/10" title={t('تأجيل + إزاحة', 'Postpone + Shift')}>
-                      <Calendar className="w-4 h-4 text-warning" />
-                    </button>
-                    <button onClick={() => { if (confirm(t('حذف الحصة؟', 'Delete?'))) deleteSessionMutation.mutate(s.id); }} className="p-2 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                    <button onClick={() => { setEditSessionId(s.id); setEditSessionForm({ session_date: s.session_date, start_time: s.start_time, end_time: s.end_time || '' }); }} className="p-2 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4 text-muted-foreground" /></button>
+                    <button onClick={() => { if (window.confirm(t('تأجيل وإزاحة؟', 'Postpone?'))) postponeSessionMutation.mutate(s.id); }} className="p-2 rounded-lg hover:bg-warning/10"><Calendar className="w-4 h-4 text-warning" /></button>
+                    <button onClick={() => { if (window.confirm(t('حذف؟', 'Delete?'))) deleteSessionMutation.mutate(s.id); }} className="p-2 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
                   </div>
                 </div>
               )}
@@ -402,35 +475,88 @@ export default function CourseDetailPage() {
         </div>
       )}
 
-      {/* Notes */}
+      {/* Notes Tab - Full featured */}
       {tab === 'notes' && (
         <div className="space-y-4">
           <button onClick={() => setShowAddNote(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">
             <Plus className="w-4 h-4" />{t('ملاحظة جديدة', 'New Note')}
           </button>
-          {showAddNote && (
-            <div className="glass-card rounded-xl p-4 space-y-3">
-              <input value={noteForm.title} onChange={e => setNoteForm(f => ({ ...f, title: e.target.value }))} placeholder={t('العنوان', 'Title')} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm" />
-              <textarea value={noteForm.content} onChange={e => setNoteForm(f => ({ ...f, content: e.target.value }))} placeholder={t('المحتوى', 'Content')} rows={6} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm resize-none" />
-              <div className="flex gap-2">
-                <button onClick={() => addNoteMutation.mutate()} disabled={!noteForm.title} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50">{t('حفظ', 'Save')}</button>
-                <button onClick={() => setShowAddNote(false)} className="px-4 py-2 rounded-lg bg-muted text-foreground text-sm">{t('إلغاء', 'Cancel')}</button>
-              </div>
-            </div>
-          )}
+          <AnimatePresence>
+            {showAddNote && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 backdrop-blur-sm p-4">
+                <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-2xl bg-card rounded-2xl shadow-xl border border-border overflow-hidden max-h-[90vh] overflow-y-auto">
+                  <div className="flex justify-between items-center p-4 border-b border-border">
+                    <h3 className="font-bold">{t('ملاحظة جديدة', 'New Note')}</h3>
+                    <button onClick={() => setShowAddNote(false)}><X className="w-5 h-5" /></button>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    <input value={noteForm.title} onChange={e => setNoteForm(f => ({ ...f, title: e.target.value }))} placeholder={t('العنوان', 'Title')} className="w-full px-4 py-3 rounded-lg border border-input bg-background text-foreground text-lg font-semibold" />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm text-muted-foreground">{t('لون النص:', 'Text color:')}</span>
+                      {TEXT_COLORS.map(c => (
+                        <button key={c.value} onClick={() => setSelectedTextColor(c.value)} className={`w-6 h-6 rounded-full border-2 transition-all ${selectedTextColor === c.value ? 'border-primary scale-110' : 'border-transparent'}`} style={{ backgroundColor: c.value }} />
+                      ))}
+                      <button onClick={applyNoteColor} className="px-2 py-1 text-xs rounded bg-muted text-foreground">{t('تلوين', 'Color')}</button>
+                      <button onClick={insertChecklist} className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-muted text-foreground">
+                        <CheckSquare className="w-3 h-3" />{t('مهمة', 'Task')}
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">{t('لون الورقة:', 'Paper:')}</span>
+                      {PAPER_COLORS.map(c => (
+                        <button key={c} onClick={() => setNoteForm(f => ({ ...f, color: c }))} className={`w-7 h-7 rounded-full border-2 transition-all ${noteForm.color === c ? 'border-primary scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                    <div className="note-paper rounded-xl p-6 min-h-[250px]" style={{ backgroundColor: noteForm.color }}>
+                      <div ref={noteContentRef} contentEditable suppressContentEditableWarning className="min-h-[210px] outline-none text-foreground leading-[32px] whitespace-pre-wrap" style={{ fontFamily: "'Caveat', 'Cairo', cursive", fontSize: '18px', lineHeight: '32px' }} />
+                    </div>
+                    <button onClick={() => addNoteMutation.mutate()} disabled={!noteForm.title} className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold disabled:opacity-50">
+                      {t('حفظ', 'Save')}
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Expanded Note */}
+          <AnimatePresence>
+            {expandedNote && (() => {
+              const note = notes.find((n: any) => n.id === expandedNote);
+              if (!note) return null;
+              return (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 backdrop-blur-sm p-4" onClick={() => setExpandedNote(null)}>
+                  <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                    <div className="note-paper rounded-2xl p-8 shadow-xl" style={{ backgroundColor: note.color }}>
+                      <div className="flex justify-between items-start mb-4">
+                        <h2 className="text-2xl font-bold text-foreground">{note.title}</h2>
+                        <div className="flex gap-2">
+                          <button onClick={() => { if (window.confirm(t('حذف؟', 'Delete?'))) { deleteNoteMutation.mutate(note.id); setExpandedNote(null); } }} className="p-2 rounded-lg hover:bg-foreground/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                          <button onClick={() => setExpandedNote(null)} className="p-2 rounded-lg hover:bg-foreground/10"><X className="w-5 h-5" /></button>
+                        </div>
+                      </div>
+                      <div className="text-foreground/80 leading-[32px] whitespace-pre-wrap" style={{ fontFamily: "'Caveat', 'Cairo', cursive", fontSize: '18px' }} dangerouslySetInnerHTML={{ __html: note.content || '' }} />
+                    </div>
+                  </motion.div>
+                </motion.div>
+              );
+            })()}
+          </AnimatePresence>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {notes.map((note: any) => (
-              <div key={note.id} className="note-paper rounded-xl p-5 relative group min-h-[120px]">
-                <button onClick={() => deleteNoteMutation.mutate(note.id)} className="absolute top-2 end-2 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4 text-destructive" /></button>
-                <h4 className="font-semibold mb-2">{note.title}</h4>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{note.content}</p>
-              </div>
+              <motion.div key={note.id} whileHover={{ y: -2 }} onClick={() => setExpandedNote(note.id)} className="note-paper rounded-xl p-5 relative group min-h-[160px] cursor-pointer shadow-sm" style={{ backgroundColor: note.color }}>
+                <button onClick={e => { e.stopPropagation(); if (window.confirm(t('حذف؟', 'Delete?'))) deleteNoteMutation.mutate(note.id); }} className="absolute top-2 end-2 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                <h4 className="font-semibold mb-2 text-foreground">{note.title}</h4>
+                <div className="text-sm text-foreground/70 line-clamp-4 leading-[32px]" style={{ fontFamily: "'Caveat', 'Cairo', cursive" }} dangerouslySetInnerHTML={{ __html: note.content || '' }} />
+              </motion.div>
             ))}
           </div>
+          {notes.length === 0 && <p className="text-center text-muted-foreground py-8">{t('لا توجد ملاحظات', 'No notes')}</p>}
         </div>
       )}
 
-      {/* Files */}
+      {/* Files Tab */}
       {tab === 'files' && (
         <div className="space-y-4">
           <label className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium cursor-pointer w-fit">
@@ -445,13 +571,13 @@ export default function CourseDetailPage() {
                   <p className="text-xs text-muted-foreground">{(file.file_size / 1024).toFixed(1)} KB</p>
                 </div>
                 <div className="flex gap-2">
-                  <a href={getViewerUrl(file.file_url, file.file_type)} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-muted" title={t('فتح', 'Open')}><ExternalLink className="w-4 h-4 text-primary" /></a>
-                  <a href={file.file_url} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-muted" title={t('تنزيل', 'Download')}><Download className="w-4 h-4 text-muted-foreground" /></a>
+                  <a href={getViewerUrl(file.file_url, file.file_type)} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-muted"><ExternalLink className="w-4 h-4 text-primary" /></a>
+                  <a href={file.file_url} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-muted"><Download className="w-4 h-4 text-muted-foreground" /></a>
                   <button onClick={() => deleteFileMutation.mutate(file.id)} className="p-2 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
                 </div>
               </div>
             ))}
-            {files.length === 0 && <p className="text-center text-muted-foreground py-8">{t('لا توجد ملفات', 'No files yet')}</p>}
+            {files.length === 0 && <p className="text-center text-muted-foreground py-8">{t('لا توجد ملفات', 'No files')}</p>}
           </div>
         </div>
       )}
