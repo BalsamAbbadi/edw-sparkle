@@ -3,10 +3,11 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, ChevronLeft, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Calendar as CalendarIcon, StickyNote, X } from 'lucide-react';
 import { format, addDays, startOfWeek, addWeeks, subWeeks, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { AnimatePresence, motion } from 'framer-motion';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -22,6 +23,8 @@ export function DashboardCalendar() {
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [draggedSession, setDraggedSession] = useState<any>(null);
+  const [noteSession, setNoteSession] = useState<any>(null);
+  const [noteText, setNoteText] = useState('');
 
   const locale = lang === 'ar' ? ar : undefined;
   const isRTL = lang === 'ar';
@@ -45,7 +48,20 @@ export function DashboardCalendar() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['sessions'] });
+      qc.invalidateQueries({ queryKey: ['course-sessions'] });
       toast.success(t('تم تحديث الجلسة', 'Session updated'));
+    },
+  });
+
+  const saveNoteMutation = useMutation({
+    mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
+      const { error } = await supabase.from('sessions').update({ session_notes: notes }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sessions'] });
+      setNoteSession(null);
+      toast.success(t('تم حفظ الملاحظة', 'Note saved'));
     },
   });
 
@@ -87,42 +103,49 @@ export function DashboardCalendar() {
   const handleDrop = (e: React.DragEvent, date: Date, hour: number) => {
     e.preventDefault();
     if (!draggedSession) return;
-    const newDate = format(date, 'yyyy-MM-dd');
-    const newTime = `${String(hour).padStart(2, '0')}:00`;
-    updateSessionMutation.mutate({ id: draggedSession.id, date: newDate, time: newTime });
+    updateSessionMutation.mutate({ id: draggedSession.id, date: format(date, 'yyyy-MM-dd'), time: `${String(hour).padStart(2, '0')}:00` });
     setDraggedSession(null);
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
 
-  // Get current day name for daily view header
-  const currentDayIndex = (currentDate.getDay() + 1) % 7; // Adjusted for Saturday start
+  const currentDayIndex = (currentDate.getDay() + 1) % 7;
   const dayNameFull = lang === 'ar' ? DAY_NAMES_AR[currentDayIndex] : DAY_NAMES_EN[currentDayIndex];
 
-  // Title based on view
   let headerTitle = '';
-  if (viewMode === 'day') {
-    headerTitle = `${dayNameFull} - ${format(currentDate, 'dd / MM / yyyy')}`;
-  } else if (viewMode === 'week') {
-    headerTitle = format(currentDate, 'dd MMMM yyyy', { locale });
-  } else {
-    headerTitle = format(currentDate, 'MMMM yyyy', { locale });
-  }
+  if (viewMode === 'day') headerTitle = `${dayNameFull} - ${format(currentDate, 'dd / MM / yyyy')}`;
+  else if (viewMode === 'week') headerTitle = format(currentDate, 'dd MMMM yyyy', { locale });
+  else headerTitle = format(currentDate, 'MMMM yyyy', { locale });
 
   const dayNames = lang === 'ar' ? DAY_NAMES_AR_SHORT : DAY_NAMES_EN_SHORT;
 
+  const SessionBlock = ({ session, compact = false }: { session: any; compact?: boolean }) => (
+    <div
+      draggable
+      onDragStart={e => handleDragStart(e, session)}
+      className={`${session.color || 'bg-primary/20 text-primary border-primary/30'} border rounded-lg ${compact ? 'p-1.5 text-xs' : 'p-3'} cursor-grab active:cursor-grabbing relative group/session`}
+    >
+      <div className="font-semibold truncate">{session.title}</div>
+      <div className={`opacity-70 ${compact ? '' : 'text-sm'}`}>{session.start_time?.slice(0, 5)}{session.end_time ? ` - ${session.end_time?.slice(0, 5)}` : ''}</div>
+      {session.session_notes && <div className="absolute top-1 end-1"><StickyNote className="w-3 h-3 text-warning" /></div>}
+      <button
+        onClick={(e) => { e.stopPropagation(); setNoteSession(session); setNoteText(session.session_notes || ''); }}
+        className="absolute bottom-1 end-1 opacity-0 group-hover/session:opacity-100 transition-opacity p-0.5 rounded hover:bg-foreground/10"
+      >
+        <StickyNote className="w-3 h-3" />
+      </button>
+    </div>
+  );
+
   return (
-    <div className="glass-card rounded-2xl overflow-hidden">
+    <div className="glass-card rounded-2xl overflow-hidden bg-card/60 backdrop-blur-xl border border-border/50">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border-b border-border gap-3">
         <div className="flex items-center gap-3">
           <CalendarIcon className="w-5 h-5 text-primary" />
           <h2 className="text-lg font-bold text-foreground">{headerTitle}</h2>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex bg-muted rounded-lg p-1">
+          <div className="flex bg-muted/50 backdrop-blur-sm rounded-lg p-1">
             {views.map(v => (
               <button key={v.key} onClick={() => setViewMode(v.key)} className={`px-3 py-1.5 text-sm rounded-md transition-all ${viewMode === v.key ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
                 {v.label}
@@ -137,20 +160,37 @@ export function DashboardCalendar() {
         </div>
       </div>
 
+      {/* Session Note Modal */}
+      <AnimatePresence>
+        {noteSession && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 backdrop-blur-sm p-4" onClick={() => setNoteSession(null)}>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-md bg-card/90 backdrop-blur-xl rounded-2xl shadow-xl border border-border/50 p-6 space-y-4" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold">{t('ملاحظات الحصة', 'Session Notes')}</h3>
+                <button onClick={() => setNoteSession(null)}><X className="w-5 h-5" /></button>
+              </div>
+              <p className="text-sm text-muted-foreground">{noteSession.title} - {noteSession.session_date}</p>
+              <textarea value={noteText} onChange={e => setNoteText(e.target.value)} rows={4} placeholder={t('أضف ملاحظاتك هنا...', 'Add your notes here...')} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground text-sm resize-none" />
+              <button onClick={() => saveNoteMutation.mutate({ id: noteSession.id, notes: noteText })} className="w-full py-2 rounded-lg bg-primary text-primary-foreground font-medium">{t('حفظ', 'Save')}</button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="p-4">
         {viewMode === 'month' ? (
           <div>
             <div className="grid grid-cols-7 gap-1 mb-2">
-              {dayNames.map(d => <div key={d} className="text-center text-xs font-medium text-muted-foreground py-2">{d}</div>)}
+              {dayNames.map(d => <div key={d} className="text-center text-xs font-medium text-muted-foreground py-1">{d}</div>)}
             </div>
             <div className="grid grid-cols-7 gap-1">
               {Array.from({ length: monthDays[0].getDay() === 6 ? 0 : (monthDays[0].getDay() + 1) % 7 }).map((_, i) => <div key={`e-${i}`} />)}
               {monthDays.map(day => {
                 const daySessions = getSessionsForDate(day);
                 return (
-                  <div key={day.toISOString()} onClick={() => { setCurrentDate(day); setViewMode('day'); }} className={`aspect-square flex flex-col items-center justify-center rounded-lg text-sm cursor-pointer transition-colors relative ${isToday(day) ? 'bg-primary text-primary-foreground font-bold' : isSameDay(day, currentDate) ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'}`}>
-                    {format(day, 'd')}
-                    {daySessions.length > 0 && <div className="w-1.5 h-1.5 rounded-full bg-primary absolute bottom-1" />}
+                  <div key={day.toISOString()} onClick={() => { setCurrentDate(day); setViewMode('day'); }} className={`min-h-[60px] flex flex-col items-center justify-start p-1 rounded-lg text-xs cursor-pointer transition-colors ${isToday(day) ? 'bg-primary text-primary-foreground font-bold' : isSameDay(day, currentDate) ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'}`}>
+                    <span>{format(day, 'd')}</span>
+                    {daySessions.length > 0 && <div className="w-1.5 h-1.5 rounded-full bg-primary mt-0.5" />}
                   </div>
                 );
               })}
@@ -175,13 +215,8 @@ export function DashboardCalendar() {
                     {weekDays.map(day => {
                       const cellSessions = getSessionsForDateHour(day, hour);
                       return (
-                        <div key={`${day.toISOString()}-${hour}`} className="border border-border/30 rounded-md min-h-[44px] p-1 hover:bg-muted/50 transition-colors cursor-pointer" onDragOver={handleDragOver} onDrop={e => handleDrop(e, day, hour)}>
-                          {cellSessions.map((session: any) => (
-                            <div key={session.id} draggable onDragStart={e => handleDragStart(e, session)} className={`${session.color || 'bg-primary/20 text-primary border-primary/30'} border rounded-md p-1.5 text-xs cursor-grab active:cursor-grabbing`}>
-                              <div className="font-semibold truncate">{session.title}</div>
-                              <div className="opacity-70">{session.start_time?.slice(0, 5)}</div>
-                            </div>
-                          ))}
+                        <div key={`${day.toISOString()}-${hour}`} className="border border-border/20 rounded-md min-h-[44px] p-1 hover:bg-muted/30 transition-colors" onDragOver={handleDragOver} onDrop={e => handleDrop(e, day, hour)}>
+                          {cellSessions.map((session: any) => <SessionBlock key={session.id} session={session} compact />)}
                         </div>
                       );
                     })}
@@ -197,13 +232,8 @@ export function DashboardCalendar() {
               return (
                 <div key={hour} className="flex gap-3" onDragOver={handleDragOver} onDrop={e => handleDrop(e, currentDate, hour)}>
                   <div className="w-16 text-sm text-muted-foreground py-3 text-center shrink-0">{`${hour}:00`}</div>
-                  <div className="flex-1 border-t border-border/30 min-h-[56px] py-2 hover:bg-muted/30 rounded-lg transition-colors px-2">
-                    {cellSessions.map((session: any) => (
-                      <div key={session.id} draggable onDragStart={e => handleDragStart(e, session)} className={`${session.color || 'bg-primary/20 text-primary border-primary/30'} border rounded-lg p-3 cursor-grab active:cursor-grabbing`}>
-                        <div className="font-semibold">{session.title}</div>
-                        <div className="text-sm opacity-70">{session.start_time?.slice(0, 5)}{session.end_time ? ` - ${session.end_time?.slice(0, 5)}` : ''}</div>
-                      </div>
-                    ))}
+                  <div className="flex-1 border-t border-border/30 min-h-[56px] py-2 hover:bg-muted/20 rounded-lg transition-colors px-2">
+                    {cellSessions.map((session: any) => <SessionBlock key={session.id} session={session} />)}
                   </div>
                 </div>
               );
@@ -214,7 +244,7 @@ export function DashboardCalendar() {
 
       <div className="px-4 pb-3">
         <p className="text-xs text-muted-foreground text-center">
-          {t('💡 اسحب الجلسات لتغيير الوقت والتاريخ', '💡 Drag sessions to change time and date')}
+          {t('💡 اسحب الجلسات لتغيير الوقت • اضغط 📝 لإضافة ملاحظات', '💡 Drag to reschedule • Click 📝 for notes')}
         </p>
       </div>
     </div>
