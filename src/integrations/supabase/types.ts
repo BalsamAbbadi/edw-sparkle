@@ -138,6 +138,7 @@ export type Database = {
           created_at: string
           id: string
           is_checklist: boolean | null
+          is_pinned: boolean | null
           title: string
           updated_at: string
           user_id: string
@@ -149,6 +150,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_checklist?: boolean | null
+          is_pinned?: boolean | null
           title?: string
           updated_at?: string
           user_id: string
@@ -160,6 +162,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_checklist?: boolean | null
+          is_pinned?: boolean | null
           title?: string
           updated_at?: string
           user_id?: string
@@ -323,6 +326,7 @@ export type Database = {
           end_time: string | null
           id: string
           session_date: string
+          session_notes: string | null
           start_time: string
           title: string
           updated_at: string
@@ -335,6 +339,7 @@ export type Database = {
           end_time?: string | null
           id?: string
           session_date: string
+          session_notes?: string | null
           start_time: string
           title: string
           updated_at?: string
@@ -347,6 +352,7 @@ export type Database = {
           end_time?: string | null
           id?: string
           session_date?: string
+          session_notes?: string | null
           start_time?: string
           title?: string
           updated_at?: string
