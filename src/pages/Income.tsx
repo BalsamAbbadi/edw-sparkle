@@ -1,24 +1,24 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DollarSign, TrendingUp, Award, AlertTriangle, X } from 'lucide-react';
+import { DollarSign, TrendingUp, Award, AlertTriangle, X, ArrowRight, ChevronDown } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import {
-  ChartContainer, ChartTooltip, ChartTooltipContent
-} from '@/components/ui/chart';
-import {
-  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  ResponsiveContainer, LineChart, Line, Tooltip, Legend
-} from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+
+type DrillView = 'collected' | 'outstanding' | 'expected' | 'ranking' | null;
+type RankingMode = 'income' | 'ratio' | 'students' | 'collection';
 
 export default function IncomePage() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
   const [detailModal, setDetailModal] = useState<any>(null);
+  const [drillView, setDrillView] = useState<DrillView>(null);
+  const [rankingMode, setRankingMode] = useState<RankingMode>('income');
 
   const { data: payments = [] } = useQuery({
     queryKey: ['all-payments-income'],
@@ -30,32 +30,35 @@ export default function IncomePage() {
     enabled: !!user,
   });
 
-  const { data: courses = [] } = useQuery({
-    queryKey: ['courses'],
+  const { data: enrollments = [] } = useQuery({
+    queryKey: ['all-enrollments'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('courses').select('*');
+      const { data, error } = await supabase.from('enrollments').select('course_id, student_id');
       if (error) throw error;
       return data;
     },
     enabled: !!user,
   });
 
-  // Monthly revenue (last 12 months)
+  const { data: sessions = [] } = useQuery({
+    queryKey: ['sessions'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('sessions').select('course_id, session_date');
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
   const monthlyData = Array.from({ length: 12 }, (_, i) => {
     const date = subMonths(new Date(), 11 - i);
-    const monthStart = startOfMonth(date);
-    const monthEnd = endOfMonth(date);
-    const monthPayments = payments.filter((p: any) => {
-      const d = new Date(p.created_at);
-      return d >= monthStart && d <= monthEnd;
-    });
-    const collected = monthPayments.reduce((s: number, p: any) => s + Number(p.amount_paid), 0);
-    const total = monthPayments.reduce((s: number, p: any) => s + Number(p.total_amount), 0);
+    const ms = startOfMonth(date), me = endOfMonth(date);
+    const mp = payments.filter((p: any) => { const d = new Date(p.created_at); return d >= ms && d <= me; });
     return {
       month: format(date, 'MMM', { locale: lang === 'ar' ? ar : undefined }),
-      collected,
-      total,
-      outstanding: total - collected,
+      collected: mp.reduce((s: number, p: any) => s + Number(p.amount_paid), 0),
+      total: mp.reduce((s: number, p: any) => s + Number(p.total_amount), 0),
+      outstanding: mp.reduce((s: number, p: any) => s + Number(p.total_amount) - Number(p.amount_paid), 0),
     };
   });
 
@@ -63,28 +66,41 @@ export default function IncomePage() {
   const totalExpected = payments.reduce((s: number, p: any) => s + Number(p.total_amount), 0);
   const totalOutstanding = totalExpected - totalCollected;
 
-  // Best course by income
-  const courseIncome: Record<string, { title: string; total: number; collected: number }> = {};
+  // Course income data
+  const courseIncome: Record<string, { title: string; total: number; collected: number; studentCount: number }> = {};
   payments.forEach((p: any) => {
     const cid = p.course_id;
-    if (!courseIncome[cid]) courseIncome[cid] = { title: p.courses?.title || '', total: 0, collected: 0 };
+    if (!courseIncome[cid]) courseIncome[cid] = { title: p.courses?.title || '', total: 0, collected: 0, studentCount: 0 };
     courseIncome[cid].total += Number(p.total_amount);
     courseIncome[cid].collected += Number(p.amount_paid);
   });
-  const courseRanking = Object.values(courseIncome).sort((a, b) => b.collected - a.collected);
-  const bestCourse = courseRanking[0];
+  // Add student counts
+  enrollments.forEach((e: any) => {
+    if (courseIncome[e.course_id]) courseIncome[e.course_id].studentCount++;
+  });
 
-  // Late students
-  const lateStudents = payments.filter((p: any) => p.status === 'unpaid' || p.status === 'partial');
+  const courseList = Object.entries(courseIncome).map(([id, data]) => ({
+    id, ...data,
+    collectionRate: data.total > 0 ? Math.round((data.collected / data.total) * 100) : 0,
+    lastSession: sessions.filter((s: any) => s.course_id === id).sort((a: any, b: any) => b.session_date.localeCompare(a.session_date))[0]?.session_date || '',
+  }));
 
-  // Pie data
-  const fullCount = payments.filter((p: any) => p.status === 'full').length;
-  const partialCount = payments.filter((p: any) => p.status === 'partial').length;
-  const unpaidCount = payments.filter((p: any) => p.status === 'unpaid').length;
+  const getSortedCourses = () => {
+    switch (rankingMode) {
+      case 'income': return [...courseList].sort((a, b) => b.collected - a.collected);
+      case 'ratio': return [...courseList].sort((a, b) => b.collectionRate - a.collectionRate);
+      case 'students': return [...courseList].sort((a, b) => b.studentCount - a.studentCount);
+      case 'collection': return [...courseList].sort((a, b) => b.collectionRate - a.collectionRate);
+      default: return courseList;
+    }
+  };
+
+  const bestCourse = [...courseList].sort((a, b) => b.collected - a.collected)[0];
+
   const pieData = [
-    { name: t('مدفوع', 'Paid'), value: fullCount, fill: 'hsl(var(--success))' },
-    { name: t('جزئي', 'Partial'), value: partialCount, fill: 'hsl(var(--warning))' },
-    { name: t('غير مدفوع', 'Unpaid'), value: unpaidCount, fill: 'hsl(var(--destructive))' },
+    { name: t('مدفوع', 'Paid'), value: payments.filter((p: any) => p.status === 'full').length, fill: 'hsl(var(--success))' },
+    { name: t('جزئي', 'Partial'), value: payments.filter((p: any) => p.status === 'partial').length, fill: 'hsl(var(--warning))' },
+    { name: t('غير مدفوع', 'Unpaid'), value: payments.filter((p: any) => p.status === 'unpaid').length, fill: 'hsl(var(--destructive))' },
   ].filter(d => d.value > 0);
 
   const chartConfig = {
@@ -92,11 +108,13 @@ export default function IncomePage() {
     outstanding: { label: t('المتبقي', 'Outstanding'), color: 'hsl(var(--destructive))' },
   };
 
-  // Payment timeline
-  const timelinePayments = [...payments]
-    .filter((p: any) => p.amount_paid > 0)
-    .sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-    .slice(0, 20);
+  const timelinePayments = [...payments].filter((p: any) => p.amount_paid > 0).sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()).slice(0, 20);
+
+  const rankModes: { key: RankingMode; label: string }[] = [
+    { key: 'income', label: t('حسب الدخل', 'By Income') },
+    { key: 'students', label: t('حسب عدد الطلاب', 'By Students') },
+    { key: 'collection', label: t('حسب نسبة التحصيل', 'By Collection Rate') },
+  ];
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -105,52 +123,102 @@ export default function IncomePage() {
         <h1 className="text-2xl font-bold text-foreground">{t('الدخل', 'Income')}</h1>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards - Clickable */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="glass-card rounded-xl p-5 bg-card/80 backdrop-blur-md border border-border/50">
+        <button onClick={() => setDrillView('collected')} className="glass-card rounded-xl p-5 bg-card/60 backdrop-blur-xl border border-border/50 text-start hover:ring-2 hover:ring-success/30 transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center"><TrendingUp className="w-5 h-5 text-success" /></div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">{totalCollected} ₪</p>
-              <p className="text-xs text-muted-foreground">{t('إجمالي المحصّل', 'Total Collected')}</p>
-            </div>
+            <div><p className="text-2xl font-bold text-foreground">{totalCollected} ₪</p><p className="text-xs text-muted-foreground">{t('إجمالي المحصّل', 'Total Collected')}</p></div>
           </div>
-        </div>
-        <div className="glass-card rounded-xl p-5">
+        </button>
+        <button onClick={() => setDrillView('outstanding')} className="glass-card rounded-xl p-5 bg-card/60 backdrop-blur-xl border border-border/50 text-start hover:ring-2 hover:ring-destructive/30 transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center"><AlertTriangle className="w-5 h-5 text-destructive" /></div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">{totalOutstanding} ₪</p>
-              <p className="text-xs text-muted-foreground">{t('المتبقي', 'Outstanding')}</p>
-            </div>
+            <div><p className="text-2xl font-bold text-foreground">{totalOutstanding} ₪</p><p className="text-xs text-muted-foreground">{t('المتبقي', 'Outstanding')}</p></div>
           </div>
-        </div>
-        <div className="glass-card rounded-xl p-5">
+        </button>
+        <button onClick={() => setDrillView('expected')} className="glass-card rounded-xl p-5 bg-card/60 backdrop-blur-xl border border-border/50 text-start hover:ring-2 hover:ring-primary/30 transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"><DollarSign className="w-5 h-5 text-primary" /></div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">{totalExpected} ₪</p>
-              <p className="text-xs text-muted-foreground">{t('الإجمالي المتوقع', 'Total Expected')}</p>
-            </div>
+            <div><p className="text-2xl font-bold text-foreground">{totalExpected} ₪</p><p className="text-xs text-muted-foreground">{t('الإجمالي المتوقع', 'Expected')}</p></div>
           </div>
-        </div>
-        {bestCourse && (
-          <div className="glass-card rounded-xl p-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center"><Award className="w-5 h-5 text-accent-foreground" /></div>
-              <div>
-                <p className="text-sm font-bold text-foreground truncate">{bestCourse.title}</p>
-                <p className="text-xs text-muted-foreground">{t('أفضل دورة دخلاً', 'Top Course')} - {bestCourse.collected} ₪</p>
-              </div>
-            </div>
+        </button>
+        <button onClick={() => setDrillView('ranking')} className="glass-card rounded-xl p-5 bg-card/60 backdrop-blur-xl border border-border/50 text-start hover:ring-2 hover:ring-accent/30 transition-all">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center"><Award className="w-5 h-5 text-accent-foreground" /></div>
+            <div><p className="text-sm font-bold text-foreground truncate">{bestCourse?.title || '-'}</p><p className="text-xs text-muted-foreground">{t('أفضل دورة', 'Top Course')} {bestCourse ? `- ${bestCourse.collected} ₪` : ''}</p></div>
           </div>
-        )}
+        </button>
       </div>
 
-      {/* Charts Row */}
+      {/* Drill-down Views */}
+      <AnimatePresence>
+        {drillView && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 backdrop-blur-sm p-4" onClick={() => setDrillView(null)}>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-card/95 backdrop-blur-xl rounded-2xl shadow-xl border border-border/50 p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold">
+                  {drillView === 'collected' && t('تفاصيل المحصّل', 'Collected Details')}
+                  {drillView === 'outstanding' && t('تفاصيل المتبقي', 'Outstanding Details')}
+                  {drillView === 'expected' && t('تفاصيل المتوقع', 'Expected Details')}
+                  {drillView === 'ranking' && t('تصنيف الدورات', 'Course Rankings')}
+                </h3>
+                <button onClick={() => setDrillView(null)}><X className="w-5 h-5" /></button>
+              </div>
+
+              {drillView === 'ranking' ? (
+                <div className="space-y-4">
+                  <div className="flex gap-2 flex-wrap">
+                    {rankModes.map(m => (
+                      <button key={m.key} onClick={() => setRankingMode(m.key)} className={`px-3 py-1.5 rounded-lg text-sm transition-all ${rankingMode === m.key ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}`}>{m.label}</button>
+                    ))}
+                  </div>
+                  <div className="space-y-3">
+                    {getSortedCourses().map((c, i) => (
+                      <div key={c.id} className="glass-card rounded-xl p-4 bg-card/60 border border-border/30">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{i + 1}</span>
+                            <h4 className="font-bold text-foreground">{c.title}</h4>
+                          </div>
+                          <span className="text-sm font-bold text-foreground">{c.collected} ₪</span>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                          <span>👩‍🎓 {c.studentCount} {t('طالب', 'students')}</span>
+                          <span>{t('المتوقع:', 'Expected:')} {c.total} ₪</span>
+                          <span>{t('التحصيل:', 'Collection:')} {c.collectionRate}%</span>
+                        </div>
+                        <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${c.collectionRate}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {courseList.map(c => {
+                    const value = drillView === 'collected' ? c.collected : drillView === 'outstanding' ? (c.total - c.collected) : c.total;
+                    return (
+                      <div key={c.id} className="flex items-center justify-between rounded-xl bg-muted/30 px-4 py-3">
+                        <div>
+                          <p className="font-medium text-foreground">{c.title}</p>
+                          <p className="text-xs text-muted-foreground">👩‍🎓 {c.studentCount} • {t('التحصيل:', 'Rate:')} {c.collectionRate}%</p>
+                        </div>
+                        <span className="font-bold text-foreground">{value} ₪</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Monthly Revenue Bar Chart */}
-        <div className="glass-card rounded-2xl p-6 bg-card/80 backdrop-blur-md border border-border/50">
+        <div className="glass-card rounded-2xl p-6 bg-card/60 backdrop-blur-xl border border-border/50">
           <h3 className="text-lg font-bold text-foreground mb-4">{t('الأرباح الشهرية', 'Monthly Revenue')}</h3>
           <ChartContainer config={chartConfig} className="h-[280px] w-full">
             <BarChart data={monthlyData}>
@@ -163,18 +231,13 @@ export default function IncomePage() {
             </BarChart>
           </ChartContainer>
         </div>
-
-        {/* Pie Chart */}
-        <div className="glass-card rounded-2xl p-6 bg-card/80 backdrop-blur-md border border-border/50">
-          <h3 className="text-lg font-bold text-foreground mb-4">{t('توزيع حالات الدفع', 'Payment Status Distribution')}</h3>
-          <div className="h-[280px] flex items-center justify-center">
+        <div className="glass-card rounded-2xl p-6 bg-card/60 backdrop-blur-xl border border-border/50">
+          <h3 className="text-lg font-bold text-foreground mb-4">{t('توزيع حالات الدفع', 'Payment Distribution')}</h3>
+          <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value"
-                  onClick={(data) => setDetailModal(data)} className="cursor-pointer">
-                  {pieData.map((entry, index) => (
-                    <Cell key={index} fill={entry.fill} className="hover:opacity-80 transition-opacity" />
-                  ))}
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value" onClick={(data) => setDetailModal(data)} className="cursor-pointer">
+                  {pieData.map((entry, i) => <Cell key={i} fill={entry.fill} className="hover:opacity-80 transition-opacity" />)}
                 </Pie>
                 <Tooltip formatter={(value: any, name: any) => [`${value} ${t('طالب', 'students')}`, name]} />
                 <Legend />
@@ -184,58 +247,30 @@ export default function IncomePage() {
         </div>
       </div>
 
-      {/* Revenue by Course */}
-      <div className="glass-card rounded-2xl p-6 bg-card/80 backdrop-blur-md border border-border/50">
-        <h3 className="text-lg font-bold text-foreground mb-4">{t('الدخل حسب الدورة', 'Revenue by Course')}</h3>
-        <ChartContainer config={chartConfig} className="h-[250px] w-full">
-          <BarChart data={courseRanking.slice(0, 10)} layout="vertical">
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
-            <XAxis type="number" />
-            <YAxis dataKey="title" type="category" width={120} className="text-xs" />
-            <ChartTooltip content={<ChartTooltipContent />} />
-            <Bar dataKey="collected" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} name={t('المحصّل', 'Collected')} />
-          </BarChart>
-        </ChartContainer>
-      </div>
-
       {/* Late Students & Timeline */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Late Students */}
-        <div className="glass-card rounded-2xl p-6 bg-card/80 backdrop-blur-md border border-border/50">
+        <div className="glass-card rounded-2xl p-6 bg-card/60 backdrop-blur-xl border border-border/50">
           <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-destructive" />
-            {t('طلاب متأخرون بالدفع', 'Late Payments')} ({lateStudents.length})
+            {t('طلاب متأخرون', 'Late Payments')} ({payments.filter((p: any) => p.status !== 'full').length})
           </h3>
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
-            {lateStudents.map((p: any) => (
+            {payments.filter((p: any) => p.status !== 'full').map((p: any) => (
               <div key={p.id} className={`rounded-lg p-3 flex items-center justify-between ${p.status === 'unpaid' ? 'bg-destructive/5 border border-destructive/20' : 'bg-warning/5 border border-warning/20'}`}>
-                <div>
-                  <p className="font-medium text-foreground text-sm">{p.students?.name}</p>
-                  <p className="text-xs text-muted-foreground">{p.courses?.title}</p>
-                </div>
-                <div className="text-end">
-                  <p className="text-sm font-bold text-foreground">{p.amount_paid}/{p.total_amount} ₪</p>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${p.status === 'unpaid' ? 'bg-destructive/20 text-destructive' : 'bg-warning/20 text-warning'}`}>
-                    {p.status === 'unpaid' ? t('غير مدفوع', 'Unpaid') : t('جزئي', 'Partial')}
-                  </span>
-                </div>
+                <div><p className="font-medium text-foreground text-sm">{p.students?.name}</p><p className="text-xs text-muted-foreground">{p.courses?.title}</p></div>
+                <div className="text-end"><p className="text-sm font-bold">{p.amount_paid}/{p.total_amount} ₪</p></div>
               </div>
             ))}
-            {lateStudents.length === 0 && <p className="text-center text-muted-foreground py-4">{t('لا يوجد طلاب متأخرين 🎉', 'No late payments 🎉')}</p>}
+            {payments.filter((p: any) => p.status !== 'full').length === 0 && <p className="text-center text-muted-foreground py-4">🎉</p>}
           </div>
         </div>
-
-        {/* Payment Timeline */}
-        <div className="glass-card rounded-2xl p-6 bg-card/80 backdrop-blur-md border border-border/50">
+        <div className="glass-card rounded-2xl p-6 bg-card/60 backdrop-blur-xl border border-border/50">
           <h3 className="text-lg font-bold text-foreground mb-4">{t('سجل الدفعات', 'Payment Timeline')}</h3>
           <div className="space-y-3 max-h-[300px] overflow-y-auto">
             {timelinePayments.map((p: any) => (
               <div key={p.id} className="flex items-center gap-3">
                 <div className={`w-2 h-2 rounded-full shrink-0 ${p.status === 'full' ? 'bg-success' : p.status === 'partial' ? 'bg-warning' : 'bg-destructive'}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{p.students?.name} - {p.courses?.title}</p>
-                  <p className="text-xs text-muted-foreground">{p.amount_paid} ₪ {t('من', 'of')} {p.total_amount} ₪</p>
-                </div>
+                <div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground truncate">{p.students?.name} - {p.courses?.title}</p><p className="text-xs text-muted-foreground">{p.amount_paid} ₪ {t('من', 'of')} {p.total_amount} ₪</p></div>
                 <span className="text-xs text-muted-foreground shrink-0">{format(new Date(p.updated_at), 'dd/MM')}</span>
               </div>
             ))}
@@ -247,25 +282,23 @@ export default function IncomePage() {
       <AnimatePresence>
         {detailModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 backdrop-blur-sm p-4" onClick={() => setDetailModal(null)}>
-            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-md bg-card rounded-2xl shadow-xl border border-border p-6" onClick={e => e.stopPropagation()}>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-md bg-card/95 backdrop-blur-xl rounded-2xl shadow-xl border border-border/50 p-6" onClick={e => e.stopPropagation()}>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-bold">{detailModal.name}</h3>
                 <button onClick={() => setDetailModal(null)}><X className="w-5 h-5" /></button>
               </div>
               <p className="text-3xl font-bold text-foreground mb-2">{detailModal.value} {t('طالب', 'students')}</p>
               <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                {payments
-                  .filter((p: any) => {
-                    if (detailModal.name.includes(t('مدفوع', 'Paid')) && !detailModal.name.includes(t('غير', 'Un'))) return p.status === 'full';
-                    if (detailModal.name.includes(t('جزئي', 'Partial'))) return p.status === 'partial';
-                    return p.status === 'unpaid';
-                  })
-                  .map((p: any) => (
-                    <div key={p.id} className="flex justify-between items-center rounded-lg bg-muted/50 px-3 py-2">
-                      <span className="text-sm">{p.students?.name}</span>
-                      <span className="text-sm font-medium">{p.amount_paid}/{p.total_amount} ₪</span>
-                    </div>
-                  ))}
+                {payments.filter((p: any) => {
+                  if (detailModal.name.includes(t('مدفوع', 'Paid')) && !detailModal.name.includes(t('غير', 'Un'))) return p.status === 'full';
+                  if (detailModal.name.includes(t('جزئي', 'Partial'))) return p.status === 'partial';
+                  return p.status === 'unpaid';
+                }).map((p: any) => (
+                  <div key={p.id} className="flex justify-between items-center rounded-lg bg-muted/50 px-3 py-2">
+                    <span className="text-sm">{p.students?.name}</span>
+                    <span className="text-sm font-medium">{p.amount_paid}/{p.total_amount} ₪</span>
+                  </div>
+                ))}
               </div>
             </motion.div>
           </motion.div>

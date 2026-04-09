@@ -74,42 +74,35 @@ export default function ProfilePage() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl mx-auto space-y-6">
-      {/* Cover / Header */}
-      <div className="relative rounded-2xl overflow-hidden shadow-lg">
-        <div className="h-48 bg-gradient-to-br from-primary via-primary/80 to-accent/60" />
-        <div className="absolute -bottom-20 start-8">
-          <label className="relative cursor-pointer group">
-            <div className="w-40 h-40 rounded-full bg-card flex items-center justify-center overflow-hidden border-4 border-card shadow-2xl ring-4 ring-primary/20">
-              {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <User className="w-20 h-20 text-primary/40" />
-              )}
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center rounded-full bg-foreground/30 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Camera className="w-10 h-10 text-primary-foreground" />
-            </div>
-            <input type="file" accept="image/*" className="hidden" onChange={uploadAvatar} />
-          </label>
-        </div>
-      </div>
-
-      {/* Name & Status */}
-      <div className="pt-24 px-4">
-        <h1 className="text-3xl font-bold text-foreground">{profile?.display_name || user?.email}</h1>
+      {/* Profile Header - Clean, no cover */}
+      <div className="glass-card rounded-2xl p-8 bg-card/60 backdrop-blur-xl border border-border/50 text-center">
+        <label className="relative cursor-pointer group inline-block">
+          <div className="w-36 h-36 rounded-full bg-card flex items-center justify-center overflow-hidden border-4 border-primary/20 shadow-2xl ring-4 ring-primary/10 mx-auto">
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+            ) : (
+              <User className="w-20 h-20 text-primary/40" />
+            )}
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center rounded-full bg-foreground/30 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Camera className="w-10 h-10 text-primary-foreground" />
+          </div>
+          <input type="file" accept="image/*" className="hidden" onChange={uploadAvatar} />
+        </label>
+        <h1 className="text-3xl font-bold text-foreground mt-4">{profile?.display_name || user?.email}</h1>
         {profile?.status_caption && <p className="text-muted-foreground mt-1 text-lg">{profile.status_caption}</p>}
-        <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+        <div className="flex items-center justify-center gap-2 mt-2 text-sm text-muted-foreground">
           <Mail className="w-4 h-4" />{user?.email}
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 px-4">
-        <div className="glass-card rounded-xl p-5 flex items-center gap-3 bg-card/80 backdrop-blur-md border border-border/50">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="glass-card rounded-xl p-5 flex items-center gap-3 bg-card/60 backdrop-blur-xl border border-border/50">
           <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center"><BookOpen className="w-6 h-6 text-primary" /></div>
           <div><p className="text-3xl font-bold text-foreground">{courseCount}</p><p className="text-xs text-muted-foreground">{t('دورة', 'Courses')}</p></div>
         </div>
-        <div className="glass-card rounded-xl p-5 flex items-center gap-3 bg-card/80 backdrop-blur-md border border-border/50">
+        <div className="glass-card rounded-xl p-5 flex items-center gap-3 bg-card/60 backdrop-blur-xl border border-border/50">
           <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center"><Users className="w-6 h-6 text-secondary-foreground" /></div>
           <div><p className="text-3xl font-bold text-foreground">{studentCount}</p><p className="text-xs text-muted-foreground">{t('طالب', 'Students')}</p></div>
         </div>
@@ -117,26 +110,26 @@ export default function ProfilePage() {
 
       {/* Bio */}
       {profile?.bio && (
-        <div className="glass-card rounded-xl p-6 mx-4 bg-card/80 backdrop-blur-md border border-border/50">
+        <div className="glass-card rounded-xl p-6 bg-card/60 backdrop-blur-xl border border-border/50">
           <h3 className="font-semibold text-foreground mb-2">{t('نبذة عني', 'About Me')}</h3>
           <p className="text-muted-foreground whitespace-pre-wrap leading-relaxed">{profile.bio}</p>
         </div>
       )}
 
       {/* Edit Form */}
-      <div className="glass-card rounded-2xl p-6 mx-4 space-y-4 bg-card/80 backdrop-blur-md border border-border/50">
+      <div className="glass-card rounded-2xl p-6 space-y-4 bg-card/60 backdrop-blur-xl border border-border/50">
         <h3 className="text-lg font-bold text-foreground">{t('تعديل الملف الشخصي', 'Edit Profile')}</h3>
         <div>
           <label className="text-sm font-medium text-foreground mb-1 block">{t('الاسم', 'Name')}</label>
-          <input value={form.display_name} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))} className="w-full px-4 py-2.5 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
+          <input value={form.display_name} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))} className="w-full px-4 py-2.5 rounded-lg border border-input bg-background/50 backdrop-blur-sm text-foreground focus:ring-2 focus:ring-ring outline-none" />
         </div>
         <div>
           <label className="text-sm font-medium text-foreground mb-1 block">{t('الحالة', 'Status')}</label>
-          <input value={form.status_caption} onChange={e => setForm(f => ({ ...f, status_caption: e.target.value }))} placeholder={t('مثال: متاح للتدريس', 'e.g. Available')} className="w-full px-4 py-2.5 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
+          <input value={form.status_caption} onChange={e => setForm(f => ({ ...f, status_caption: e.target.value }))} placeholder={t('مثال: متاح للتدريس', 'e.g. Available')} className="w-full px-4 py-2.5 rounded-lg border border-input bg-background/50 backdrop-blur-sm text-foreground focus:ring-2 focus:ring-ring outline-none" />
         </div>
         <div>
           <label className="text-sm font-medium text-foreground mb-1 block">{t('النبذة', 'Bio')}</label>
-          <textarea value={form.bio} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))} rows={4} className="w-full px-4 py-2.5 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none resize-none" />
+          <textarea value={form.bio} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))} rows={4} className="w-full px-4 py-2.5 rounded-lg border border-input bg-background/50 backdrop-blur-sm text-foreground focus:ring-2 focus:ring-ring outline-none resize-none" />
         </div>
         <div className="flex gap-3">
           <button onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors">
