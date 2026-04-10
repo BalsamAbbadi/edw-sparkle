@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, Calendar, Users, Check, X, Edit2, CheckSquare, Square, StickyNote } from 'lucide-react';
+import { ArrowRight, Calendar, Users, Check, X, Edit2, CheckSquare, Square, StickyNote, User } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
