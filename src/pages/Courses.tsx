@@ -262,6 +262,12 @@ export default function CoursesPage() {
     );
   };
 
+  const filteredCourses = courses.filter((c: any) => {
+    if (courseTab === 'archived') return (c as any).is_archived;
+    if (courseTab === 'short') return (c as any).course_type === 'short' && !(c as any).is_archived;
+    return ((c as any).course_type || 'long') === 'long' && !(c as any).is_archived;
+  });
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       <div className="flex items-center justify-between">
@@ -272,6 +278,19 @@ export default function CoursesPage() {
         <button onClick={() => { resetForm(); setShowForm(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors">
           <Plus className="w-4 h-4" />{t('دورة جديدة', 'New Course')}
         </button>
+      </div>
+
+      {/* Course Type Tabs */}
+      <div className="flex gap-2 bg-muted/50 backdrop-blur-sm rounded-lg p-1">
+        {[
+          { key: 'long' as const, label: t('دورات طويلة المدى', 'Long-term Courses') },
+          { key: 'short' as const, label: t('دورات قصيرة المدى', 'Short-term Courses') },
+          { key: 'archived' as const, label: t('أرشيف الدورات', 'Archived Courses') },
+        ].map(tb => (
+          <button key={tb.key} onClick={() => setCourseTab(tb.key)} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${courseTab === tb.key ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            {tb.label}
+          </button>
+        ))}
       </div>
 
       {/* Form Modal */}
