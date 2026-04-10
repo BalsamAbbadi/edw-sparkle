@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Plus, Edit2, Trash2, X, Clock, Users, Copy, Calendar as CalIcon } from 'lucide-react';
+import { BookOpen, Plus, Edit2, Trash2, X, Clock, Users, Copy, Calendar as CalIcon, Archive } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -420,13 +420,21 @@ export default function CoursesPage() {
             const studentNum = enrollmentCounts[course.id] || 0;
             const pStats = paymentsByCourse[course.id] || { full: 0, partial: 0, unpaid: 0 };
             return (
-              <motion.div key={course.id} whileHover={{ y: -3 }} className="glass-card rounded-2xl overflow-hidden cursor-pointer group bg-card/60 backdrop-blur-xl border border-border/50" onClick={() => navigate(`/courses/${course.id}`)}>
+              <motion.div key={course.id} whileHover={{ y: -3 }} className={`glass-card rounded-2xl overflow-hidden cursor-pointer group bg-card/60 backdrop-blur-xl border border-border/50 ${course.is_archived ? 'opacity-60 grayscale' : ''}`} onClick={() => navigate(`/courses/${course.id}`)}>
                 <div className="p-5">
                   <div className="flex items-start justify-between mb-3">
                     <h3 className="text-lg font-bold text-foreground">{course.title}</h3>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                       <button onClick={() => { setShowDuplicate(course); setDupStartDate(format(new Date(), 'yyyy-MM-dd')); }} className="p-1.5 rounded-lg hover:bg-muted"><Copy className="w-4 h-4 text-muted-foreground" /></button>
                       <button onClick={() => startEdit(course)} className="p-1.5 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4 text-muted-foreground" /></button>
+                      {!course.is_archived && (
+                        <button onClick={async () => {
+                          await supabase.from('courses').update({ is_archived: true, archived_at: new Date().toISOString() } as any).eq('id', course.id);
+                          qc.invalidateQueries({ queryKey: ['courses'] });
+                          notify('course', t(`تم أرشفة الدورة: ${course.title}`, `Course archived: ${course.title}`));
+                          toast.success(t('تم أرشفة الدورة', 'Course archived'));
+                        }} className="p-1.5 rounded-lg hover:bg-muted"><Archive className="w-4 h-4 text-muted-foreground" /></button>
+                      )}
                       <button onClick={() => {
                         const msg = t('سيتم حذف الدورة وجميع الطلاب والدفعات المرتبطة بها. هل أنت متأكد؟', 'This will delete the course and all related students, payments, sessions. Are you sure?');
                         if (window.confirm(msg)) deleteMutation.mutate(course.id);
