@@ -8,6 +8,7 @@ import { format, addDays, startOfWeek, addWeeks, subWeeks, addMonths, subMonths,
 import { ar } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -20,6 +21,7 @@ export function DashboardCalendar() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [draggedSession, setDraggedSession] = useState<any>(null);
