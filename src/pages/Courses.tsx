@@ -18,6 +18,8 @@ interface CourseForm {
   totalSessions: number;
   startDate: string;
   sessionColor: string;
+  course_type: string;
+  payment_interval_sessions: number;
   recurring_schedule: { day: number; startTime: string; endTime: string }[];
 }
 
@@ -57,6 +59,7 @@ const SESSION_COLORS = [
 const emptyForm: CourseForm = {
   title: '', description: '', duration: '', fees: '', totalSessions: 16,
   startDate: format(new Date(), 'yyyy-MM-dd'), sessionColor: SESSION_COLORS[0],
+  course_type: 'long', payment_interval_sessions: 0,
   recurring_schedule: []
 };
 
@@ -71,6 +74,7 @@ export default function CoursesPage() {
   const [form, setForm] = useState<CourseForm>(emptyForm);
   const [showDuplicate, setShowDuplicate] = useState<any>(null);
   const [dupStartDate, setDupStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [courseTab, setCourseTab] = useState<'long' | 'short' | 'archived'>('long');
 
   const { data: courses = [], isLoading } = useQuery({
     queryKey: ['courses'],
