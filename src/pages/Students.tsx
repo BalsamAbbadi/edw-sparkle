@@ -14,6 +14,7 @@ export default function StudentsPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const { notify } = useNotification();
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filterCourse, setFilterCourse] = useState('');
   const [filterPayment, setFilterPayment] = useState('');
@@ -308,7 +309,7 @@ export default function StudentsPage() {
                     )}
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-bold text-foreground">{student.name}</h3>
+                        <h3 className="text-lg font-bold text-foreground cursor-pointer hover:text-primary transition-colors" onClick={() => navigate(`/students/${student.id}`)}>{student.name}</h3>
                         {isUnpaid && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-warning/20 to-destructive/10 text-warning font-medium">{t('متأخر', 'Due')}</span>}
                       </div>
                       <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
