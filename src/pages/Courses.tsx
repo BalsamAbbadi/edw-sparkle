@@ -144,15 +144,19 @@ export default function CoursesPage() {
       if (editingId) {
         const { error } = await supabase.from('courses').update({
           title: formData.title, description: formData.description, duration: formData.duration, fees, recurring_schedule: formData.recurring_schedule as any,
-        }).eq('id', editingId);
+          course_type: formData.course_type, payment_interval_sessions: formData.payment_interval_sessions,
+        } as any).eq('id', editingId);
         if (error) throw error;
+        // Update total_amount in payments when fees change
+        await supabase.from('payments').update({ total_amount: fees } as any).eq('course_id', editingId);
       } else {
         const { data: course, error } = await supabase.from('courses').insert({
           user_id: user!.id, title: formData.title, description: formData.description, duration: formData.duration, fees, recurring_schedule: formData.recurring_schedule as any,
-        }).select().single();
+          course_type: formData.course_type, payment_interval_sessions: formData.payment_interval_sessions, start_date: formData.startDate,
+        } as any).select().single();
         if (error) throw error;
         await createSessions(course.id, formData.title, formData.recurring_schedule, formData.totalSessions, formData.startDate, formData.sessionColor);
-        notify('course', t(`تم إنشاء دورة: ${formData.title}`, `Course created: ${formData.title}`));
+        notify('course', t(`تم إنشاء دورة: ${formData.title}`, `Course created: ${formData.title}`), `/courses/${course.id}`);
       }
     },
     onSuccess: () => {
