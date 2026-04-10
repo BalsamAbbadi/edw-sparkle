@@ -226,6 +226,8 @@ export default function CoursesPage() {
       title: course.title, description: course.description || '', duration: course.duration || '',
       fees: course.fees || '', totalSessions: 16, startDate: format(new Date(), 'yyyy-MM-dd'),
       sessionColor: SESSION_COLORS[0],
+      course_type: (course as any).course_type || 'long',
+      payment_interval_sessions: (course as any).payment_interval_sessions || 0,
       recurring_schedule: (course.recurring_schedule as any[]) || [],
     });
     setShowForm(true);
