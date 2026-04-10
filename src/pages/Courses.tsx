@@ -303,6 +303,14 @@ export default function CoursesPage() {
                 <button onClick={resetForm}><X className="w-5 h-5" /></button>
               </div>
               <form onSubmit={e => { e.preventDefault(); saveMutation.mutate(form); }} className="p-4 space-y-4">
+                {/* Course Type */}
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1 block">{t('نوع الدورة', 'Course Type')}</label>
+                  <select value={form.course_type} onChange={e => setForm(f => ({ ...f, course_type: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none">
+                    <option value="long">{t('طويلة المدى', 'Long-term')}</option>
+                    <option value="short">{t('قصيرة المدى', 'Short-term')}</option>
+                  </select>
+                </div>
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1 block">{t('اسم الدورة', 'Course Title')}</label>
                   <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
