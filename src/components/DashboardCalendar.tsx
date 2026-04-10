@@ -125,7 +125,8 @@ export function DashboardCalendar() {
     <div
       draggable
       onDragStart={e => handleDragStart(e, session)}
-      className={`${session.color || 'bg-primary/20 text-primary border-primary/30'} border rounded-lg ${compact ? 'p-1.5 text-xs' : 'p-3'} cursor-grab active:cursor-grabbing relative group/session`}
+      onClick={() => navigate(`/sessions/${session.id}`)}
+      className={`${session.color || 'bg-primary/20 text-primary border-primary/30'} border rounded-lg ${compact ? 'p-1.5 text-xs' : 'p-3'} cursor-pointer relative group/session`}
     >
       <div className="font-semibold truncate">{session.title}</div>
       <div className={`opacity-70 ${compact ? '' : 'text-sm'}`}>{session.start_time?.slice(0, 5)}{session.end_time ? ` - ${session.end_time?.slice(0, 5)}` : ''}</div>
