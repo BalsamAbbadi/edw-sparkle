@@ -405,14 +405,14 @@ export default function CoursesPage() {
       {/* Courses Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{[1, 2, 3].map(i => <div key={i} className="glass-card rounded-xl p-6 animate-pulse h-48" />)}</div>
-      ) : courses.length === 0 ? (
+      ) : filteredCourses.length === 0 ? (
         <div className="glass-card rounded-xl p-12 text-center bg-card/60 backdrop-blur-xl border border-border/50">
           <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">{t('لا توجد دورات بعد!', 'No courses yet!')}</p>
+          <p className="text-muted-foreground">{courseTab === 'archived' ? t('لا توجد دورات مؤرشفة', 'No archived courses') : t('لا توجد دورات بعد!', 'No courses yet!')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {courses.map((course: any) => {
+          {filteredCourses.map((course: any) => {
             const studentNum = enrollmentCounts[course.id] || 0;
             const pStats = paymentsByCourse[course.id] || { full: 0, partial: 0, unpaid: 0 };
             return (
