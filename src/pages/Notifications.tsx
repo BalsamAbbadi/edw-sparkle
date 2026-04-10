@@ -6,11 +6,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 export default function NotificationsPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: notifications = [], isLoading } = useQuery({
     queryKey: ['notifications'],
@@ -92,7 +94,7 @@ export default function NotificationsPage() {
       ) : (
         <div className="space-y-2">
           {notifications.map((n: any) => (
-            <div key={n.id} className={`glass-card rounded-xl p-4 flex items-center justify-between bg-card/60 backdrop-blur-xl border border-border/50 ${!n.is_read ? 'border-s-4 border-s-primary' : ''}`}>
+            <div key={n.id} className={`glass-card rounded-xl p-4 flex items-center justify-between bg-card/60 backdrop-blur-xl border border-border/50 cursor-pointer ${!n.is_read ? 'border-s-4 border-s-primary' : ''}`} onClick={() => { if ((n as any).link_to) { markReadMutation.mutate(n.id); navigate((n as any).link_to); } }}>
               <div className="flex items-center gap-3">
                 <span className="text-xl">{typeIcon(n.type)}</span>
                 <div>
