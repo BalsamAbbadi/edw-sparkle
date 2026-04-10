@@ -24,6 +24,8 @@ import Notifications from "./pages/Notifications";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import AIChat from "./pages/AIChat";
+import StudentProfile from "./pages/StudentProfile";
+import SessionProfile from "./pages/SessionProfile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -57,12 +59,14 @@ function ProtectedRoutes() {
           <Route path="/schedule" element={<Schedule />} />
           <Route path="/courses" element={<Courses />} />
           <Route path="/courses/:id" element={<CourseDetail />} />
+          <Route path="/students/:id" element={<StudentProfile />} />
           <Route path="/students" element={<Students />} />
           <Route path="/payments" element={<Payments />} />
           <Route path="/income" element={<Income />} />
           <Route path="/notes" element={<Notes />} />
           <Route path="/files" element={<Files />} />
           <Route path="/notifications" element={<Notifications />} />
+          <Route path="/sessions/:id" element={<SessionProfile />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/ai-chat" element={<AIChat />} />
