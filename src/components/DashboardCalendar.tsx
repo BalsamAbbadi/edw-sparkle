@@ -155,9 +155,9 @@ export function DashboardCalendar() {
             ))}
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => navigate('prev')} className="p-2 rounded-lg hover:bg-muted transition-colors"><PrevIcon className="w-4 h-4" /></button>
+            <button onClick={() => navigateCalendar('prev')} className="p-2 rounded-lg hover:bg-muted transition-colors"><PrevIcon className="w-4 h-4" /></button>
             <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-sm rounded-lg hover:bg-muted transition-colors text-primary font-medium">{t('اليوم', 'Today')}</button>
-            <button onClick={() => navigate('next')} className="p-2 rounded-lg hover:bg-muted transition-colors"><NextIcon className="w-4 h-4" /></button>
+            <button onClick={() => navigateCalendar('next')} className="p-2 rounded-lg hover:bg-muted transition-colors"><NextIcon className="w-4 h-4" /></button>
           </div>
         </div>
       </div>
