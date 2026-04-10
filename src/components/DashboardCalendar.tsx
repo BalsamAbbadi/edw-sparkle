@@ -67,7 +67,7 @@ export function DashboardCalendar() {
     },
   });
 
-  const navigate = (direction: 'prev' | 'next') => {
+  const navigateCalendar = (direction: 'prev' | 'next') => {
     const d = direction === 'next' ? 1 : -1;
     if (viewMode === 'day') setCurrentDate(prev => addDays(prev, d));
     else if (viewMode === 'week') setCurrentDate(prev => d > 0 ? addWeeks(prev, 1) : subWeeks(prev, 1));
