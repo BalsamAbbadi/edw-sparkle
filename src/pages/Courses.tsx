@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Plus, Edit2, Trash2, X, Clock, Users, Copy, Calendar as CalIcon } from 'lucide-react';
+import { BookOpen, Plus, Edit2, Trash2, X, Clock, Users, Copy, Calendar as CalIcon, Archive } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,6 +18,8 @@ interface CourseForm {
   totalSessions: number;
   startDate: string;
   sessionColor: string;
+  course_type: string;
+  payment_interval_sessions: number;
   recurring_schedule: { day: number; startTime: string; endTime: string }[];
 }
 
@@ -57,6 +59,7 @@ const SESSION_COLORS = [
 const emptyForm: CourseForm = {
   title: '', description: '', duration: '', fees: '', totalSessions: 16,
   startDate: format(new Date(), 'yyyy-MM-dd'), sessionColor: SESSION_COLORS[0],
+  course_type: 'long', payment_interval_sessions: 0,
   recurring_schedule: []
 };
 
@@ -71,6 +74,7 @@ export default function CoursesPage() {
   const [form, setForm] = useState<CourseForm>(emptyForm);
   const [showDuplicate, setShowDuplicate] = useState<any>(null);
   const [dupStartDate, setDupStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [courseTab, setCourseTab] = useState<'long' | 'short' | 'archived'>('long');
 
   const { data: courses = [], isLoading } = useQuery({
     queryKey: ['courses'],
@@ -140,15 +144,19 @@ export default function CoursesPage() {
       if (editingId) {
         const { error } = await supabase.from('courses').update({
           title: formData.title, description: formData.description, duration: formData.duration, fees, recurring_schedule: formData.recurring_schedule as any,
-        }).eq('id', editingId);
+          course_type: formData.course_type, payment_interval_sessions: formData.payment_interval_sessions,
+        } as any).eq('id', editingId);
         if (error) throw error;
+        // Update total_amount in payments when fees change
+        await supabase.from('payments').update({ total_amount: fees } as any).eq('course_id', editingId);
       } else {
         const { data: course, error } = await supabase.from('courses').insert({
           user_id: user!.id, title: formData.title, description: formData.description, duration: formData.duration, fees, recurring_schedule: formData.recurring_schedule as any,
-        }).select().single();
+          course_type: formData.course_type, payment_interval_sessions: formData.payment_interval_sessions, start_date: formData.startDate,
+        } as any).select().single();
         if (error) throw error;
         await createSessions(course.id, formData.title, formData.recurring_schedule, formData.totalSessions, formData.startDate, formData.sessionColor);
-        notify('course', t(`تم إنشاء دورة: ${formData.title}`, `Course created: ${formData.title}`));
+        notify('course', t(`تم إنشاء دورة: ${formData.title}`, `Course created: ${formData.title}`), `/courses/${course.id}`);
       }
     },
     onSuccess: () => {
@@ -222,6 +230,8 @@ export default function CoursesPage() {
       title: course.title, description: course.description || '', duration: course.duration || '',
       fees: course.fees || '', totalSessions: 16, startDate: format(new Date(), 'yyyy-MM-dd'),
       sessionColor: SESSION_COLORS[0],
+      course_type: (course as any).course_type || 'long',
+      payment_interval_sessions: (course as any).payment_interval_sessions || 0,
       recurring_schedule: (course.recurring_schedule as any[]) || [],
     });
     setShowForm(true);
@@ -252,6 +262,12 @@ export default function CoursesPage() {
     );
   };
 
+  const filteredCourses = courses.filter((c: any) => {
+    if (courseTab === 'archived') return (c as any).is_archived;
+    if (courseTab === 'short') return (c as any).course_type === 'short' && !(c as any).is_archived;
+    return ((c as any).course_type || 'long') === 'long' && !(c as any).is_archived;
+  });
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       <div className="flex items-center justify-between">
@@ -264,6 +280,19 @@ export default function CoursesPage() {
         </button>
       </div>
 
+      {/* Course Type Tabs */}
+      <div className="flex gap-2 bg-muted/50 backdrop-blur-sm rounded-lg p-1">
+        {[
+          { key: 'long' as const, label: t('دورات طويلة المدى', 'Long-term Courses') },
+          { key: 'short' as const, label: t('دورات قصيرة المدى', 'Short-term Courses') },
+          { key: 'archived' as const, label: t('أرشيف الدورات', 'Archived Courses') },
+        ].map(tb => (
+          <button key={tb.key} onClick={() => setCourseTab(tb.key)} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${courseTab === tb.key ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            {tb.label}
+          </button>
+        ))}
+      </div>
+
       {/* Form Modal */}
       <AnimatePresence>
         {showForm && (
@@ -274,6 +303,14 @@ export default function CoursesPage() {
                 <button onClick={resetForm}><X className="w-5 h-5" /></button>
               </div>
               <form onSubmit={e => { e.preventDefault(); saveMutation.mutate(form); }} className="p-4 space-y-4">
+                {/* Course Type */}
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1 block">{t('نوع الدورة', 'Course Type')}</label>
+                  <select value={form.course_type} onChange={e => setForm(f => ({ ...f, course_type: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none">
+                    <option value="long">{t('طويلة المدى', 'Long-term')}</option>
+                    <option value="short">{t('قصيرة المدى', 'Short-term')}</option>
+                  </select>
+                </div>
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1 block">{t('اسم الدورة', 'Course Title')}</label>
                   <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
@@ -291,6 +328,10 @@ export default function CoursesPage() {
                     <label className="text-sm font-medium text-foreground mb-1 block">{t('الرسوم (₪)', 'Fees (₪)')}</label>
                     <input type="number" value={form.fees} onChange={e => setForm(f => ({ ...f, fees: e.target.value === '' ? '' : Number(e.target.value) }))} min={0} placeholder={t('أدخل السعر', 'Enter price')} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
                   </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1 block">{t('موعد الدفع (بعد كم حصة)', 'Payment interval (sessions)')}</label>
+                  <input type="number" value={form.payment_interval_sessions || ''} onChange={e => setForm(f => ({ ...f, payment_interval_sessions: Number(e.target.value) || 0 }))} min={0} placeholder={t('0 = بدون تحديد', '0 = none')} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
                 </div>
 
                 {!editingId && (
@@ -368,24 +409,32 @@ export default function CoursesPage() {
       {/* Courses Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{[1, 2, 3].map(i => <div key={i} className="glass-card rounded-xl p-6 animate-pulse h-48" />)}</div>
-      ) : courses.length === 0 ? (
+      ) : filteredCourses.length === 0 ? (
         <div className="glass-card rounded-xl p-12 text-center bg-card/60 backdrop-blur-xl border border-border/50">
           <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">{t('لا توجد دورات بعد!', 'No courses yet!')}</p>
+          <p className="text-muted-foreground">{courseTab === 'archived' ? t('لا توجد دورات مؤرشفة', 'No archived courses') : t('لا توجد دورات بعد!', 'No courses yet!')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {courses.map((course: any) => {
+          {filteredCourses.map((course: any) => {
             const studentNum = enrollmentCounts[course.id] || 0;
             const pStats = paymentsByCourse[course.id] || { full: 0, partial: 0, unpaid: 0 };
             return (
-              <motion.div key={course.id} whileHover={{ y: -3 }} className="glass-card rounded-2xl overflow-hidden cursor-pointer group bg-card/60 backdrop-blur-xl border border-border/50" onClick={() => navigate(`/courses/${course.id}`)}>
+              <motion.div key={course.id} whileHover={{ y: -3 }} className={`glass-card rounded-2xl overflow-hidden cursor-pointer group bg-card/60 backdrop-blur-xl border border-border/50 ${course.is_archived ? 'opacity-60 grayscale' : ''}`} onClick={() => navigate(`/courses/${course.id}`)}>
                 <div className="p-5">
                   <div className="flex items-start justify-between mb-3">
                     <h3 className="text-lg font-bold text-foreground">{course.title}</h3>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                       <button onClick={() => { setShowDuplicate(course); setDupStartDate(format(new Date(), 'yyyy-MM-dd')); }} className="p-1.5 rounded-lg hover:bg-muted"><Copy className="w-4 h-4 text-muted-foreground" /></button>
                       <button onClick={() => startEdit(course)} className="p-1.5 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4 text-muted-foreground" /></button>
+                      {!course.is_archived && (
+                        <button onClick={async () => {
+                          await supabase.from('courses').update({ is_archived: true, archived_at: new Date().toISOString() } as any).eq('id', course.id);
+                          qc.invalidateQueries({ queryKey: ['courses'] });
+                          notify('course', t(`تم أرشفة الدورة: ${course.title}`, `Course archived: ${course.title}`));
+                          toast.success(t('تم أرشفة الدورة', 'Course archived'));
+                        }} className="p-1.5 rounded-lg hover:bg-muted"><Archive className="w-4 h-4 text-muted-foreground" /></button>
+                      )}
                       <button onClick={() => {
                         const msg = t('سيتم حذف الدورة وجميع الطلاب والدفعات المرتبطة بها. هل أنت متأكد؟', 'This will delete the course and all related students, payments, sessions. Are you sure?');
                         if (window.confirm(msg)) deleteMutation.mutate(course.id);

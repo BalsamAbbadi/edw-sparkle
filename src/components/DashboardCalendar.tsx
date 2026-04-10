@@ -8,6 +8,7 @@ import { format, addDays, startOfWeek, addWeeks, subWeeks, addMonths, subMonths,
 import { ar } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -20,6 +21,7 @@ export function DashboardCalendar() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [draggedSession, setDraggedSession] = useState<any>(null);
@@ -65,7 +67,7 @@ export function DashboardCalendar() {
     },
   });
 
-  const navigate = (direction: 'prev' | 'next') => {
+  const navigateCalendar = (direction: 'prev' | 'next') => {
     const d = direction === 'next' ? 1 : -1;
     if (viewMode === 'day') setCurrentDate(prev => addDays(prev, d));
     else if (viewMode === 'week') setCurrentDate(prev => d > 0 ? addWeeks(prev, 1) : subWeeks(prev, 1));
@@ -123,7 +125,8 @@ export function DashboardCalendar() {
     <div
       draggable
       onDragStart={e => handleDragStart(e, session)}
-      className={`${session.color || 'bg-primary/20 text-primary border-primary/30'} border rounded-lg ${compact ? 'p-1.5 text-xs' : 'p-3'} cursor-grab active:cursor-grabbing relative group/session`}
+      onClick={() => navigate(`/sessions/${session.id}`)}
+      className={`${session.color || 'bg-primary/20 text-primary border-primary/30'} border rounded-lg ${compact ? 'p-1.5 text-xs' : 'p-3'} cursor-pointer relative group/session`}
     >
       <div className="font-semibold truncate">{session.title}</div>
       <div className={`opacity-70 ${compact ? '' : 'text-sm'}`}>{session.start_time?.slice(0, 5)}{session.end_time ? ` - ${session.end_time?.slice(0, 5)}` : ''}</div>
@@ -153,9 +156,9 @@ export function DashboardCalendar() {
             ))}
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => navigate('prev')} className="p-2 rounded-lg hover:bg-muted transition-colors"><PrevIcon className="w-4 h-4" /></button>
+            <button onClick={() => navigateCalendar('prev')} className="p-2 rounded-lg hover:bg-muted transition-colors"><PrevIcon className="w-4 h-4" /></button>
             <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-sm rounded-lg hover:bg-muted transition-colors text-primary font-medium">{t('اليوم', 'Today')}</button>
-            <button onClick={() => navigate('next')} className="p-2 rounded-lg hover:bg-muted transition-colors"><NextIcon className="w-4 h-4" /></button>
+            <button onClick={() => navigateCalendar('next')} className="p-2 rounded-lg hover:bg-muted transition-colors"><NextIcon className="w-4 h-4" /></button>
           </div>
         </div>
       </div>

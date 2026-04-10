@@ -14,36 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
+      attendance: {
+        Row: {
+          course_id: string
+          created_at: string
+          id: string
+          is_present: boolean
+          session_id: string
+          student_id: string
+          user_id: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          id?: string
+          is_present?: boolean
+          session_id: string
+          student_id: string
+          user_id: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          id?: string
+          is_present?: boolean
+          session_id?: string
+          student_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       courses: {
         Row: {
+          archived_at: string | null
+          course_type: string | null
           created_at: string
           description: string | null
           duration: string | null
           fees: number | null
           id: string
+          is_archived: boolean | null
+          payment_interval_sessions: number | null
           recurring_schedule: Json | null
+          start_date: string | null
           title: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          archived_at?: string | null
+          course_type?: string | null
           created_at?: string
           description?: string | null
           duration?: string | null
           fees?: number | null
           id?: string
+          is_archived?: boolean | null
+          payment_interval_sessions?: number | null
           recurring_schedule?: Json | null
+          start_date?: string | null
           title: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          archived_at?: string | null
+          course_type?: string | null
           created_at?: string
           description?: string | null
           duration?: string | null
           fees?: number | null
           id?: string
+          is_archived?: boolean | null
+          payment_interval_sessions?: number | null
           recurring_schedule?: Json | null
+          start_date?: string | null
           title?: string
           updated_at?: string
           user_id?: string
@@ -182,6 +227,7 @@ export type Database = {
           created_at: string
           id: string
           is_read: boolean | null
+          link_to: string | null
           message: string
           type: string
           user_id: string
@@ -190,6 +236,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_read?: boolean | null
+          link_to?: string | null
           message: string
           type?: string
           user_id: string
@@ -198,6 +245,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_read?: boolean | null
+          link_to?: string | null
           message?: string
           type?: string
           user_id?: string

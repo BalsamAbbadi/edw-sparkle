@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Search, Edit2, Trash2, X, Check, Phone, CheckSquare, Square } from 'lucide-react';
+import { Users, Search, Edit2, Trash2, X, Check, Phone, CheckSquare, Square, User } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useNotification } from '@/hooks/useNotification';
+import { useNavigate } from 'react-router-dom';
 
 export default function StudentsPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
   const qc = useQueryClient();
   const { notify } = useNotification();
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filterCourse, setFilterCourse] = useState('');
   const [filterPayment, setFilterPayment] = useState('');
@@ -307,7 +309,7 @@ export default function StudentsPage() {
                     )}
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-bold text-foreground">{student.name}</h3>
+                        <h3 className="text-lg font-bold text-foreground cursor-pointer hover:text-primary transition-colors" onClick={() => navigate(`/students/${student.id}`)}>{student.name}</h3>
                         {isUnpaid && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-warning/20 to-destructive/10 text-warning font-medium">{t('متأخر', 'Due')}</span>}
                       </div>
                       <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">

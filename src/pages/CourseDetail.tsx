@@ -403,7 +403,7 @@ export default function CourseDetailPage() {
                 <div key={enr.id} className="glass-card rounded-xl p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium text-foreground">{enr.students?.name}</p>
+                      <p className="font-medium text-foreground cursor-pointer hover:text-primary transition-colors" onClick={() => navigate(`/students/${enr.student_id}`)}>{enr.students?.name}</p>
                       <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                         {enr.students?.grade && <span>{enr.students.grade}</span>}
                         {enr.students?.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{enr.students.phone}</span>}
@@ -456,11 +456,12 @@ export default function CourseDetailPage() {
                 </div>
               ) : (
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-foreground">{t('حصة', 'Session')} #{idx + 1}</p>
+                  <div className="cursor-pointer" onClick={() => navigate(`/sessions/${s.id}`)}>
+                    <p className="font-medium text-foreground hover:text-primary transition-colors">{t('حصة', 'Session')} #{idx + 1}</p>
                     <p className="text-sm text-muted-foreground">
                       {format(new Date(s.session_date), 'EEEE dd/MM/yyyy', { locale: lang === 'ar' ? ar : undefined })} • {s.start_time?.slice(0, 5)}{s.end_time ? ` - ${s.end_time?.slice(0, 5)}` : ''}
                     </p>
+                    {s.session_notes && <p className="text-xs text-warning mt-1">📝 {s.session_notes}</p>}
                   </div>
                   <div className="flex gap-1">
                     <button onClick={() => { setEditSessionId(s.id); setEditSessionForm({ session_date: s.session_date, start_time: s.start_time, end_time: s.end_time || '' }); }} className="p-2 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4 text-muted-foreground" /></button>
