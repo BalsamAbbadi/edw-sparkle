@@ -329,6 +329,10 @@ export default function CoursesPage() {
                     <input type="number" value={form.fees} onChange={e => setForm(f => ({ ...f, fees: e.target.value === '' ? '' : Number(e.target.value) }))} min={0} placeholder={t('أدخل السعر', 'Enter price')} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
                   </div>
                 </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1 block">{t('موعد الدفع (بعد كم حصة)', 'Payment interval (sessions)')}</label>
+                  <input type="number" value={form.payment_interval_sessions || ''} onChange={e => setForm(f => ({ ...f, payment_interval_sessions: Number(e.target.value) || 0 }))} min={0} placeholder={t('0 = بدون تحديد', '0 = none')} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
+                </div>
 
                 {!editingId && (
                   <>
