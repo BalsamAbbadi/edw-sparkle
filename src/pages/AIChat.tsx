@@ -1,17 +1,37 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Bot, Send, Loader2 } from 'lucide-react';
+import { Bot, Send, Loader2, Calendar } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
+import { ar } from 'date-fns/locale';
+import ReactMarkdown from 'react-markdown';
 
 type Msg = { role: 'user' | 'assistant'; content: string };
 
+const DAY_NAMES = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+
 export default function AIChatPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+
+  // Fetch real sessions to pass to AI
+  const { data: sessions = [] } = useQuery({
+    queryKey: ['sessions'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('sessions').select('*').order('session_date', { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
@@ -25,11 +45,20 @@ export default function AIChatPage() {
     let assistantSoFar = '';
     const allMessages = [...messages, userMsg];
 
+    // Prepare sessions data for AI with day names
+    const sessionsForAI = sessions.map((s: any) => ({
+      title: s.title,
+      session_date: s.session_date,
+      day_name: DAY_NAMES[new Date(s.session_date).getDay()],
+      start_time: s.start_time,
+      end_time: s.end_time,
+    }));
+
     try {
       const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
-        body: JSON.stringify({ messages: allMessages }),
+        body: JSON.stringify({ messages: allMessages, sessions: sessionsForAI }),
       });
 
       if (!resp.ok) {
@@ -75,25 +104,45 @@ export default function AIChatPage() {
     setIsLoading(false);
   };
 
+  const quickPrompts = [
+    t('أريد إضافة دورة جديدة، ابحث عن أوقات فارغة', 'Find free time slots for a new course'),
+    t('ما هي الأوقات المتاحة هذا الأسبوع؟', 'What times are available this week?'),
+    t('أريد حصتين أسبوعياً كل واحدة ساعة', 'I need 2 sessions per week, 1 hour each'),
+  ];
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-[calc(100vh-10rem)]">
       <div className="flex items-center gap-3 mb-4">
         <Bot className="w-6 h-6 text-primary" />
-        <h1 className="text-2xl font-bold text-foreground">{t('مساعدك الاصطناعي', 'AI Assistant')}</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('مساعد الجدول الذكي', 'Smart Schedule Assistant')}</h1>
+        <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">{sessions.length} {t('حصة في الجدول', 'sessions loaded')}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-3 mb-4 glass-card rounded-2xl p-4">
         {messages.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground">
+          <div className="text-center py-8 text-muted-foreground">
             <Bot className="w-16 h-16 mx-auto mb-4 text-primary/30" />
-            <p className="text-lg font-medium">{t('مرحباً! أنا مساعدك الاصطناعي 🤖', 'Hello! I\'m your AI assistant 🤖')}</p>
-            <p className="text-sm mt-2">{t('اسألني عن طرق شرح مبتكرة، أسئلة إبداعية، أو نصائح تعليمية', 'Ask me about teaching methods, creative questions, or educational tips')}</p>
+            <p className="text-lg font-medium">{t('مرحباً! أنا مساعد الجدول الذكي 🤖', "Hello! I'm your Smart Schedule Assistant 🤖")}</p>
+            <p className="text-sm mt-2 mb-6">{t('أساعدك في إيجاد أوقات فارغة مناسبة لإضافة دورات أو حصص جديدة', 'I help you find available time slots for new courses or sessions')}</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {quickPrompts.map((p, i) => (
+                <button key={i} onClick={() => setInput(p)} className="px-3 py-2 rounded-lg bg-primary/10 text-primary text-sm hover:bg-primary/20 transition-colors">
+                  {p}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}`}>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
+              {msg.role === 'assistant' ? (
+                <div className="prose prose-sm max-w-none text-foreground">
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
+              )}
             </div>
           </div>
         ))}
@@ -104,7 +153,7 @@ export default function AIChatPage() {
       </div>
 
       <div className="flex gap-2">
-        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} placeholder={t('اكتب سؤالك هنا...', 'Type your question...')} className="flex-1 px-4 py-3 rounded-xl border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
+        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} placeholder={t('اسأل عن الأوقات الفارغة في الجدول...', 'Ask about free time slots...')} className="flex-1 px-4 py-3 rounded-xl border border-input bg-background text-foreground focus:ring-2 focus:ring-ring outline-none" />
         <button onClick={send} disabled={isLoading || !input.trim()} className="px-5 py-3 rounded-xl bg-primary text-primary-foreground font-medium disabled:opacity-50">
           <Send className="w-5 h-5" />
         </button>

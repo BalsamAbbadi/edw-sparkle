@@ -9,9 +9,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages } = await req.json();
+    const { messages, sessions } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+
+    let scheduleContext = "";
+    if (sessions && Array.isArray(sessions) && sessions.length > 0) {
+      const occupied = sessions.map((s: any) => 
+        `${s.session_date} ${s.day_name || ''} ${s.start_time}-${s.end_time || '?'} (${s.title})`
+      ).join("\n");
+      scheduleContext = `\n\nالجدول الحالي للأستاذ (الحصص المشغولة):\n${occupied}\n\nبناءً على هذا الجدول، حدد الأوقات الفارغة واقترح أفضل المواعيد المتاحة. تجنب أي تعارض مع الحصص الموجودة. أعطِ عدة خيارات مع توضيح الأيام والأوقات المقترحة.`;
+    }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -24,17 +32,21 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `أنت "مساعدك الاصطناعي" - مساعد ذكي متخصص للمعلمين والأساتذة في منصة "إبداع" التعليمية.
-            
-مهامك:
-- اقتراح طرق مبتكرة لشرح المواضيع الدراسية
-- تصميم أسئلة وتمارين إبداعية
-- نصائح للتعامل مع الطلاب الذين يواجهون صعوبات في الفهم
-- أفكار لأنشطة تعليمية تفاعلية
-- مساعدة في تخطيط الدروس والمناهج
-- نصائح تربوية وتعليمية عامة
+            content: `أنت "مساعد الجدول الذكي" - مساعد متخصص في تحليل جداول المعلمين وإيجاد الأوقات الفارغة المناسبة لإضافة دورات أو حصص جديدة.
 
-أجب دائماً باللغة العربية ما لم يُطلب منك غير ذلك. كن ودوداً ومحفزاً ومفيداً.`
+مهامك الأساسية:
+1. تحليل الجدول الحالي للأستاذ وتحديد الأوقات المشغولة والفارغة
+2. اقتراح أفضل المواعيد لإضافة دورة أو حصة جديدة بناءً على شروط الأستاذ
+3. مراعاة عدد الحصص الأسبوعية المطلوبة ومدة كل حصة
+4. تجنب أي تعارض في المواعيد
+5. تقديم عدة خيارات مع شرح مزايا كل خيار
+
+مهام إضافية:
+- اقتراح طرق مبتكرة لشرح المواضيع الدراسية
+- نصائح تعليمية وتربوية
+
+أجب دائماً باللغة العربية ما لم يُطلب غير ذلك. كن واضحاً ومنظماً في عرض الخيارات.
+${scheduleContext}`
           },
           ...messages,
         ],

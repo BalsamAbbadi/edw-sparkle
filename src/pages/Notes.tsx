@@ -124,33 +124,43 @@ export default function NotesPage() {
 
   const insertChecklist = () => {
     if (contentRef.current) {
-      document.execCommand('insertHTML', false, '<div class="checklist-item"><input type="checkbox" class="checklist-cb" /> </div>');
+      document.execCommand('insertHTML', false, '<div class="checklist-item" style="display:flex;align-items:center;gap:8px;margin:4px 0;"><input type="checkbox" style="width:16px;height:16px;cursor:pointer;" /><span>مهمة جديدة</span></div>');
     }
   };
 
-  // Handle checkbox click in expanded note view
-  const handleNoteClick = async (noteId: string, e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.tagName === 'INPUT' && target.getAttribute('type') === 'checkbox') {
-      e.stopPropagation();
-      // Toggle the checkbox
-      const note = allNotes.find((n: any) => n.id === noteId);
-      if (!note) return;
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(note.content || '', 'text/html');
-      const checkboxes = doc.querySelectorAll('input[type="checkbox"]');
-      // Find which checkbox was clicked by index
-      const container = (target as HTMLElement).closest('.checklist-item') || target.parentElement;
-      const allCheckboxesInView = container?.parentElement?.querySelectorAll('input[type="checkbox"]');
-      // Simple approach: just update the HTML
-      setTimeout(async () => {
-        const viewEl = document.querySelector(`[data-note-id="${noteId}"]`);
-        if (viewEl) {
-          await supabase.from('notes').update({ content: viewEl.innerHTML }).eq('id', noteId);
-          qc.invalidateQueries({ queryKey: ['all-notes'] });
+  // Toggle checkbox and apply strikethrough in expanded note
+  const handleCheckboxToggle = async (noteId: string, checkboxIndex: number) => {
+    const note = allNotes.find((n: any) => n.id === noteId);
+    if (!note) return;
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(note.content || '', 'text/html');
+    const checkboxes = doc.querySelectorAll('input[type="checkbox"]');
+    if (checkboxes[checkboxIndex]) {
+      const cb = checkboxes[checkboxIndex] as HTMLInputElement;
+      const wasChecked = cb.hasAttribute('checked');
+      if (wasChecked) {
+        cb.removeAttribute('checked');
+      } else {
+        cb.setAttribute('checked', 'checked');
+      }
+      // Apply/remove strikethrough on sibling span
+      const parent = cb.parentElement;
+      if (parent) {
+        const span = parent.querySelector('span');
+        if (span) {
+          if (!wasChecked) {
+            span.style.textDecoration = 'line-through';
+            span.style.opacity = '0.5';
+          } else {
+            span.style.textDecoration = 'none';
+            span.style.opacity = '1';
+          }
         }
-      }, 100);
+      }
     }
+    const newContent = doc.body.innerHTML;
+    await supabase.from('notes').update({ content: newContent }).eq('id', noteId);
+    qc.invalidateQueries({ queryKey: ['all-notes'] });
   };
 
   const filtered = allNotes.filter((n: any) => {
@@ -161,7 +171,6 @@ export default function NotesPage() {
     return titleMatch || contentText.includes(q);
   });
 
-  // Sort: pinned first
   const sortedNotes = [...filtered].sort((a: any, b: any) => {
     if (a.is_pinned && !b.is_pinned) return -1;
     if (!a.is_pinned && b.is_pinned) return 1;
@@ -169,6 +178,52 @@ export default function NotesPage() {
   });
 
   const fontFamily = lang === 'ar' ? "'Tajawal', 'Cairo', sans-serif" : "'Caveat', cursive";
+
+  // Render note content with interactive checkboxes
+  const renderNoteContent = (note: any) => {
+    const content = note.content || '';
+    // Parse and render with clickable checkboxes
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(content, 'text/html');
+    const checkboxes = doc.querySelectorAll('input[type="checkbox"]');
+    
+    return (
+      <div
+        className="text-foreground/80 leading-[32px] whitespace-pre-wrap"
+        style={{ fontFamily, fontSize: '18px' }}
+      >
+        {Array.from(doc.body.childNodes).map((node, nodeIdx) => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const el = node as HTMLElement;
+            if (el.classList.contains('checklist-item') || el.querySelector('input[type="checkbox"]')) {
+              const cb = el.querySelector('input[type="checkbox"]') as HTMLInputElement;
+              const span = el.querySelector('span');
+              const isChecked = cb?.hasAttribute('checked');
+              // Find checkbox index
+              let cbIndex = 0;
+              const allCbs = doc.querySelectorAll('input[type="checkbox"]');
+              for (let i = 0; i < allCbs.length; i++) {
+                if (allCbs[i] === cb) { cbIndex = i; break; }
+              }
+              const text = span?.textContent || el.textContent?.replace(/☐|☑/g, '').trim() || '';
+              return (
+                <div key={nodeIdx} className="flex items-center gap-2 my-1 cursor-pointer" onClick={() => handleCheckboxToggle(note.id, cbIndex)}>
+                  {isChecked ? (
+                    <CheckSquare className="w-4 h-4 text-success shrink-0" />
+                  ) : (
+                    <Square className="w-4 h-4 text-muted-foreground shrink-0" />
+                  )}
+                  <span style={{ textDecoration: isChecked ? 'line-through' : 'none', opacity: isChecked ? 0.5 : 1 }}>{text}</span>
+                </div>
+              );
+            }
+            return <div key={nodeIdx} dangerouslySetInnerHTML={{ __html: el.outerHTML }} />;
+          }
+          return <span key={nodeIdx}>{node.textContent}</span>;
+        })}
+      </div>
+    );
+  };
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -271,13 +326,7 @@ export default function NotesPage() {
                       <button onClick={() => setExpandedNote(null)} className="p-2 rounded-lg hover:bg-foreground/10"><X className="w-5 h-5" /></button>
                     </div>
                   </div>
-                  <div
-                    data-note-id={note.id}
-                    className="text-foreground/80 leading-[32px] whitespace-pre-wrap"
-                    style={{ fontFamily, fontSize: '18px' }}
-                    dangerouslySetInnerHTML={{ __html: note.content || '' }}
-                    onClick={(e) => handleNoteClick(note.id, e)}
-                  />
+                  {renderNoteContent(note)}
                   <p className="text-xs text-foreground/40 mt-6">{new Date(note.created_at).toLocaleDateString()}</p>
                 </div>
               </motion.div>
