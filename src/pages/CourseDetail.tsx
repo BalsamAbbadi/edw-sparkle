@@ -1,14 +1,15 @@
 import React, { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Users, StickyNote, FolderOpen, Calendar, ArrowRight, Plus, X, Trash2, Upload, Download, Edit2, Check, ExternalLink, Phone, CheckSquare } from 'lucide-react';
+import { BookOpen, Users, StickyNote, FolderOpen, Calendar, ArrowRight, Plus, X, Trash2, Upload, Download, Edit2, Check, ExternalLink, Phone, CheckSquare, AlertTriangle } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { format, addDays } from 'date-fns';
+import { format, addDays, isBefore } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { useNotification } from '@/hooks/useNotification';
 
 const TEXT_COLORS = [
   { label: 'أسود', value: '#1a1a1a' },
@@ -27,6 +28,7 @@ export default function CourseDetailPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { notify } = useNotification();
   const [tab, setTab] = useState<'students' | 'notes' | 'files' | 'schedule'>('students');
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [studentForm, setStudentForm] = useState({ name: '', grade: '', gender: '', notes: '', phone: '' });
@@ -41,6 +43,8 @@ export default function CourseDetailPage() {
   const [editStudentId, setEditStudentId] = useState<string | null>(null);
   const [editStudentForm, setEditStudentForm] = useState({ name: '', grade: '', gender: '', notes: '', phone: '' });
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
+  const [sessionNoteId, setSessionNoteId] = useState<string | null>(null);
+  const [sessionNoteText, setSessionNoteText] = useState('');
 
   const { data: course } = useQuery({
     queryKey: ['course', id],
@@ -102,6 +106,47 @@ export default function CourseDetailPage() {
     enabled: !!id && !!user,
   });
 
+  // Check all sessions for conflicts
+  const { data: allSessions = [] } = useQuery({
+    queryKey: ['all-sessions-conflict'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('sessions').select('id, session_date, start_time, end_time, title, course_id');
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  // Detect session conflicts
+  const hasConflict = (sessionDate: string, startTime: string, endTime: string | null, excludeId?: string) => {
+    return allSessions.some((s: any) => {
+      if (s.id === excludeId) return false;
+      if (s.session_date !== sessionDate) return false;
+      const sStart = s.start_time;
+      const sEnd = s.end_time || s.start_time;
+      const newEnd = endTime || startTime;
+      return (startTime < sEnd && newEnd > sStart);
+    });
+  };
+
+  // Attendance count per session
+  const { data: attendanceCounts = {} } = useQuery({
+    queryKey: ['attendance-counts', id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('attendance').select('session_id, is_present').eq('course_id', id!);
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      data.forEach((a: any) => { if (a.is_present) counts[a.session_id] = (counts[a.session_id] || 0) + 1; });
+      return counts;
+    },
+    enabled: !!id && !!user,
+  });
+
+  // Payment interval logic
+  const paymentInterval = (course as any)?.payment_interval_sessions || 0;
+  const completedSessionsCount = sessions.filter((s: any) => isBefore(new Date(s.session_date), new Date())).length;
+  const isPaymentDue = paymentInterval > 0 && completedSessionsCount > 0 && completedSessionsCount % paymentInterval === 0;
+
   // Mutations
   const addStudentMutation = useMutation({
     mutationFn: async () => {
@@ -121,12 +166,14 @@ export default function CourseDetailPage() {
       await supabase.from('payments').insert({
         student_id: studentId, course_id: id!, user_id: user!.id, amount_paid: 0, total_amount: course?.fees || 0,
       });
+      return studentForm.name;
     },
-    onSuccess: () => {
+    onSuccess: (name) => {
       qc.invalidateQueries({ queryKey: ['enrollments', id] });
       qc.invalidateQueries({ queryKey: ['course-payments', id] });
       qc.invalidateQueries({ queryKey: ['students'] });
       qc.invalidateQueries({ queryKey: ['payments'] });
+      notify('student', t(`تم إضافة طالب: ${name} إلى ${course?.title}`, `Student added: ${name} to ${course?.title}`), `/students/${name}`);
       toast.success(t('تم إضافة الطالب', 'Student added'));
       setShowAddStudent(false);
       setStudentForm({ name: '', grade: '', gender: '', notes: '', phone: '' });
@@ -155,6 +202,7 @@ export default function CourseDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['enrollments', id] });
       qc.invalidateQueries({ queryKey: ['students'] });
+      notify('student', t(`تم تحديث بيانات الطالب: ${editStudentForm.name}`, `Student updated: ${editStudentForm.name}`), `/students/${editStudentId}`);
       toast.success(t('تم تحديث بيانات الطالب', 'Student updated'));
       setEditStudentId(null);
     },
@@ -168,6 +216,7 @@ export default function CourseDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['course-payments', id] });
       qc.invalidateQueries({ queryKey: ['payments'] });
+      notify('payment', t('تم تحديث حالة الدفع', 'Payment updated'), `/courses/${id}`);
       toast.success(t('تم تحديث الدفعة', 'Payment updated'));
       setEditPaymentId(null);
     },
@@ -184,6 +233,7 @@ export default function CourseDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['course-notes', id] });
       qc.invalidateQueries({ queryKey: ['all-notes'] });
+      notify('note', t(`تمت إضافة ملاحظة في ${course?.title}`, `Note added in ${course?.title}`), `/courses/${id}`);
       toast.success(t('تمت إضافة الملاحظة', 'Note added'));
       setShowAddNote(false);
       setNoteForm({ title: '', content: '', color: '#FEF3C7', is_checklist: false });
@@ -214,6 +264,7 @@ export default function CourseDetailPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['course-files', id] });
+      notify('file', t('تم رفع ملف جديد', 'New file uploaded'), `/courses/${id}`);
       toast.success(t('تم رفع الملف', 'File uploaded'));
     },
   });
@@ -228,6 +279,10 @@ export default function CourseDetailPage() {
 
   const updateSessionMutation = useMutation({
     mutationFn: async () => {
+      // Check for conflicts
+      if (hasConflict(editSessionForm.session_date, editSessionForm.start_time, editSessionForm.end_time || null, editSessionId!)) {
+        throw new Error(t('يوجد تعارض مع حصة أخرى في نفس الوقت!', 'Conflict with another session at this time!'));
+      }
       const { error } = await supabase.from('sessions').update({
         session_date: editSessionForm.session_date, start_time: editSessionForm.start_time, end_time: editSessionForm.end_time || null,
       }).eq('id', editSessionId!);
@@ -236,13 +291,17 @@ export default function CourseDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['course-sessions', id] });
       qc.invalidateQueries({ queryKey: ['sessions'] });
+      qc.invalidateQueries({ queryKey: ['all-sessions-conflict'] });
+      notify('session', t(`تم تعديل موعد حصة في ${course?.title}`, `Session updated in ${course?.title}`), `/sessions/${editSessionId}`);
       toast.success(t('تم تحديث الحصة', 'Session updated'));
       setEditSessionId(null);
     },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const deleteSessionMutation = useMutation({
     mutationFn: async (sessionId: string) => {
+      await supabase.from('attendance').delete().eq('session_id', sessionId);
       const { error } = await supabase.from('sessions').delete().eq('id', sessionId);
       if (error) throw error;
     },
@@ -253,10 +312,29 @@ export default function CourseDetailPage() {
     },
   });
 
+  // Postpone with proper cascade: shift this and all subsequent sessions
   const postponeSessionMutation = useMutation({
     mutationFn: async (sessionId: string) => {
       const idx = sessions.findIndex((s: any) => s.id === sessionId);
+      if (idx < 0) return;
       const sessionsToShift = sessions.slice(idx);
+      // Calculate the gap between consecutive sessions to maintain pattern
+      for (let i = sessionsToShift.length - 1; i >= 0; i--) {
+        const s = sessionsToShift[i];
+        let newDate: string;
+        if (i < sessionsToShift.length - 1) {
+          // Shift to next session's original date
+          newDate = sessionsToShift[i + 1].session_date;
+        } else {
+          // Last session: add 7 days
+          newDate = format(addDays(new Date(s.session_date), 7), 'yyyy-MM-dd');
+        }
+        // For first session (postponed one), shift by one week
+        if (i === 0) {
+          newDate = format(addDays(new Date(s.session_date), 7), 'yyyy-MM-dd');
+        }
+      }
+      // Simpler approach: shift all from index onward by 7 days
       for (const s of sessionsToShift) {
         const newDate = format(addDays(new Date(s.session_date), 7), 'yyyy-MM-dd');
         await supabase.from('sessions').update({ session_date: newDate }).eq('id', s.id);
@@ -265,7 +343,21 @@ export default function CourseDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['course-sessions', id] });
       qc.invalidateQueries({ queryKey: ['sessions'] });
+      notify('session', t(`تم تأجيل حصة وإزاحة الحصص في ${course?.title}`, `Session postponed in ${course?.title}`), `/courses/${id}`);
       toast.success(t('تم تأجيل الحصة وإزاحة باقي الحصص', 'Session postponed'));
+    },
+  });
+
+  const saveSessionNoteMutation = useMutation({
+    mutationFn: async ({ sid, notes }: { sid: string; notes: string }) => {
+      const { error } = await supabase.from('sessions').update({ session_notes: notes }).eq('id', sid);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['course-sessions', id] });
+      qc.invalidateQueries({ queryKey: ['sessions'] });
+      setSessionNoteId(null);
+      toast.success(t('تم حفظ ملاحظة الحصة', 'Session note saved'));
     },
   });
 
@@ -286,7 +378,6 @@ export default function CourseDetailPage() {
     if (status === 'partial') return 'bg-warning/20 text-warning';
     return 'bg-destructive/20 text-destructive';
   };
-
   const statusLabel = (status: string) => {
     if (status === 'full') return t('مدفوع', 'Paid');
     if (status === 'partial') return t('جزئي', 'Partial');
@@ -302,11 +393,14 @@ export default function CourseDetailPage() {
 
   const insertChecklist = () => {
     if (noteContentRef.current) {
-      document.execCommand('insertHTML', false, '<div class="checklist-item">☐ </div>');
+      document.execCommand('insertHTML', false, '<div class="checklist-item" style="display:flex;align-items:center;gap:8px;margin:4px 0;"><input type="checkbox" style="width:16px;height:16px;cursor:pointer;" /><span>مهمة جديدة</span></div>');
     }
   };
 
   if (!course) return <div className="p-8 text-center text-muted-foreground">{t('جاري التحميل...', 'Loading...')}</div>;
+
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const isPast = (dateStr: string) => isBefore(new Date(dateStr), new Date());
 
   const tabs = [
     { key: 'students' as const, label: t('الطلاب', 'Students'), icon: Users, count: enrollments.length },
@@ -322,11 +416,15 @@ export default function CourseDetailPage() {
           <ArrowRight className="w-5 h-5 text-muted-foreground rtl:rotate-0 ltr:rotate-180" />
         </button>
         <BookOpen className="w-6 h-6 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{course.title}</h1>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">{course.title}</h1>
+            {isPaymentDue && <span className="text-xs px-2 py-0.5 rounded-full bg-warning/20 text-warning font-medium animate-pulse">💰 {t('موعد الدفع', 'Payment Due')}</span>}
+          </div>
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             {course.description && <span>{course.description}</span>}
             {course.fees > 0 && <span className="font-medium">₪ {course.fees}</span>}
+            {paymentInterval > 0 && <span className="text-xs">({t(`كل ${paymentInterval} حصص`, `Every ${paymentInterval} sessions`)})</span>}
           </div>
         </div>
       </div>
@@ -361,7 +459,6 @@ export default function CourseDetailPage() {
                     <option value="male">{t('ذكر', 'Male')}</option>
                     <option value="female">{t('أنثى', 'Female')}</option>
                   </select>
-                  <input value={studentForm.notes} onChange={e => setStudentForm(f => ({ ...f, notes: e.target.value }))} placeholder={t('ملاحظات', 'Notes')} className="px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm sm:col-span-2" />
                 </div>
                 <button onClick={() => addStudentMutation.mutate()} disabled={!studentForm.name || addStudentMutation.isPending} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50">
                   {t('إضافة', 'Add')}
@@ -412,7 +509,7 @@ export default function CourseDetailPage() {
                     <div className="flex items-center gap-2">
                       {payment && editPaymentId === payment.id ? (
                         <div className="flex items-center gap-1">
-                          <input type="number" value={editPaymentAmount} onChange={e => setEditPaymentAmount(Number(e.target.value))} min={0} max={payment.total_amount} className="w-20 px-2 py-1 rounded border border-input bg-background text-foreground text-xs" />
+                          <input type="number" value={editPaymentAmount || ''} onChange={e => setEditPaymentAmount(e.target.value === '' ? 0 : Number(e.target.value))} min={0} max={payment.total_amount} className="w-20 px-2 py-1 rounded border border-input bg-background text-foreground text-xs" />
                           <span className="text-xs text-muted-foreground">/ {payment.total_amount} ₪</span>
                           <button onClick={() => updatePaymentMutation.mutate({ payId: payment.id, amount: editPaymentAmount })} className="p-1 rounded hover:bg-success/10"><Check className="w-3.5 h-3.5 text-success" /></button>
                           <button onClick={() => setEditPaymentId(null)} className="p-1 rounded hover:bg-muted"><X className="w-3.5 h-3.5" /></button>
@@ -440,43 +537,67 @@ export default function CourseDetailPage() {
       {/* Schedule Tab */}
       {tab === 'schedule' && (
         <div className="space-y-2">
-          {sessions.map((s: any, idx: number) => (
-            <div key={s.id} className="glass-card rounded-xl p-4">
-              {editSessionId === s.id ? (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2">
-                    <input type="date" value={editSessionForm.session_date} onChange={e => setEditSessionForm(f => ({ ...f, session_date: e.target.value }))} className="px-2 py-1.5 rounded-lg border border-input bg-background text-foreground text-sm" />
-                    <input type="time" value={editSessionForm.start_time} onChange={e => setEditSessionForm(f => ({ ...f, start_time: e.target.value }))} className="px-2 py-1.5 rounded-lg border border-input bg-background text-foreground text-sm" />
-                    <input type="time" value={editSessionForm.end_time} onChange={e => setEditSessionForm(f => ({ ...f, end_time: e.target.value }))} className="px-2 py-1.5 rounded-lg border border-input bg-background text-foreground text-sm" />
+          {/* Session Note Modal */}
+          <AnimatePresence>
+            {sessionNoteId && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 backdrop-blur-sm p-4" onClick={() => setSessionNoteId(null)}>
+                <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-md bg-card/90 backdrop-blur-xl rounded-2xl shadow-xl border border-border/50 p-6 space-y-4" onClick={e => e.stopPropagation()}>
+                  <h3 className="font-bold">{t('ملاحظات الحصة', 'Session Notes')}</h3>
+                  <textarea value={sessionNoteText} onChange={e => setSessionNoteText(e.target.value)} rows={4} placeholder={t('أضف ملاحظاتك...', 'Add notes...')} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm resize-none" />
+                  <button onClick={() => saveSessionNoteMutation.mutate({ sid: sessionNoteId, notes: sessionNoteText })} className="w-full py-2 rounded-lg bg-primary text-primary-foreground font-medium">{t('حفظ', 'Save')}</button>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {sessions.map((s: any, idx: number) => {
+            const sessionIsPast = isPast(s.session_date);
+            const isPaymentSession = paymentInterval > 0 && (idx + 1) % paymentInterval === 0;
+            const conflict = hasConflict(s.session_date, s.start_time, s.end_time, s.id);
+            return (
+              <div key={s.id} className={`glass-card rounded-xl p-4 transition-all ${sessionIsPast ? 'opacity-50 grayscale' : ''} ${conflict ? 'border-destructive/50 border-2' : ''}`}>
+                {editSessionId === s.id ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2">
+                      <input type="date" value={editSessionForm.session_date} onChange={e => setEditSessionForm(f => ({ ...f, session_date: e.target.value }))} className="px-2 py-1.5 rounded-lg border border-input bg-background text-foreground text-sm" />
+                      <input type="time" value={editSessionForm.start_time} onChange={e => setEditSessionForm(f => ({ ...f, start_time: e.target.value }))} className="px-2 py-1.5 rounded-lg border border-input bg-background text-foreground text-sm" />
+                      <input type="time" value={editSessionForm.end_time} onChange={e => setEditSessionForm(f => ({ ...f, end_time: e.target.value }))} className="px-2 py-1.5 rounded-lg border border-input bg-background text-foreground text-sm" />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => updateSessionMutation.mutate()} className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm">{t('حفظ', 'Save')}</button>
+                      <button onClick={() => setEditSessionId(null)} className="px-3 py-1.5 rounded-lg bg-muted text-foreground text-sm">{t('إلغاء', 'Cancel')}</button>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => updateSessionMutation.mutate()} className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm">{t('حفظ', 'Save')}</button>
-                    <button onClick={() => setEditSessionId(null)} className="px-3 py-1.5 rounded-lg bg-muted text-foreground text-sm">{t('إلغاء', 'Cancel')}</button>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="cursor-pointer flex-1" onClick={() => navigate(`/sessions/${s.id}`)}>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-foreground hover:text-primary transition-colors">{t('حصة', 'Session')} #{idx + 1}</p>
+                        {isPaymentSession && <span className="text-[10px] px-2 py-0.5 rounded-full bg-warning/20 text-warning font-medium">💰</span>}
+                        {conflict && <span className="text-[10px] px-2 py-0.5 rounded-full bg-destructive/20 text-destructive font-medium flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{t('تعارض', 'Conflict')}</span>}
+                        {attendanceCounts[s.id] > 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/20 text-success">{attendanceCounts[s.id]} ✓</span>}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {format(new Date(s.session_date), 'EEEE dd/MM/yyyy', { locale: lang === 'ar' ? ar : undefined })} • {s.start_time?.slice(0, 5)}{s.end_time ? ` - ${s.end_time?.slice(0, 5)}` : ''}
+                      </p>
+                      {s.session_notes && <p className="text-xs text-warning mt-1">📝 {s.session_notes}</p>}
+                    </div>
+                    <div className="flex gap-1">
+                      <button onClick={() => { setSessionNoteId(s.id); setSessionNoteText(s.session_notes || ''); }} className="p-2 rounded-lg hover:bg-muted"><StickyNote className="w-4 h-4 text-warning" /></button>
+                      <button onClick={() => { setEditSessionId(s.id); setEditSessionForm({ session_date: s.session_date, start_time: s.start_time, end_time: s.end_time || '' }); }} className="p-2 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4 text-muted-foreground" /></button>
+                      <button onClick={() => { if (window.confirm(t('تأجيل وإزاحة جميع الحصص التالية؟', 'Postpone and shift all following sessions?'))) postponeSessionMutation.mutate(s.id); }} className="p-2 rounded-lg hover:bg-warning/10"><Calendar className="w-4 h-4 text-warning" /></button>
+                      <button onClick={() => { if (window.confirm(t('حذف الحصة؟', 'Delete session?'))) deleteSessionMutation.mutate(s.id); }} className="p-2 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between">
-                  <div className="cursor-pointer" onClick={() => navigate(`/sessions/${s.id}`)}>
-                    <p className="font-medium text-foreground hover:text-primary transition-colors">{t('حصة', 'Session')} #{idx + 1}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {format(new Date(s.session_date), 'EEEE dd/MM/yyyy', { locale: lang === 'ar' ? ar : undefined })} • {s.start_time?.slice(0, 5)}{s.end_time ? ` - ${s.end_time?.slice(0, 5)}` : ''}
-                    </p>
-                    {s.session_notes && <p className="text-xs text-warning mt-1">📝 {s.session_notes}</p>}
-                  </div>
-                  <div className="flex gap-1">
-                    <button onClick={() => { setEditSessionId(s.id); setEditSessionForm({ session_date: s.session_date, start_time: s.start_time, end_time: s.end_time || '' }); }} className="p-2 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4 text-muted-foreground" /></button>
-                    <button onClick={() => { if (window.confirm(t('تأجيل وإزاحة؟', 'Postpone?'))) postponeSessionMutation.mutate(s.id); }} className="p-2 rounded-lg hover:bg-warning/10"><Calendar className="w-4 h-4 text-warning" /></button>
-                    <button onClick={() => { if (window.confirm(t('حذف؟', 'Delete?'))) deleteSessionMutation.mutate(s.id); }} className="p-2 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            );
+          })}
           {sessions.length === 0 && <p className="text-center text-muted-foreground py-8">{t('لا توجد حصص', 'No sessions')}</p>}
         </div>
       )}
 
-      {/* Notes Tab - Full featured */}
+      {/* Notes Tab */}
       {tab === 'notes' && (
         <div className="space-y-4">
           <button onClick={() => setShowAddNote(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">
@@ -509,7 +630,7 @@ export default function CourseDetailPage() {
                       ))}
                     </div>
                     <div className="note-paper rounded-xl p-6 min-h-[250px]" style={{ backgroundColor: noteForm.color }}>
-                      <div ref={noteContentRef} contentEditable suppressContentEditableWarning className="min-h-[210px] outline-none text-foreground leading-[32px] whitespace-pre-wrap" style={{ fontFamily: "'Caveat', 'Cairo', cursive", fontSize: '18px', lineHeight: '32px' }} />
+                      <div ref={noteContentRef} contentEditable suppressContentEditableWarning className="min-h-[210px] outline-none text-foreground leading-[32px] whitespace-pre-wrap" style={{ fontFamily: "'Tajawal', 'Cairo', sans-serif", fontSize: '18px', lineHeight: '32px' }} />
                     </div>
                     <button onClick={() => addNoteMutation.mutate()} disabled={!noteForm.title} className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold disabled:opacity-50">
                       {t('حفظ', 'Save')}
@@ -536,7 +657,7 @@ export default function CourseDetailPage() {
                           <button onClick={() => setExpandedNote(null)} className="p-2 rounded-lg hover:bg-foreground/10"><X className="w-5 h-5" /></button>
                         </div>
                       </div>
-                      <div className="text-foreground/80 leading-[32px] whitespace-pre-wrap" style={{ fontFamily: "'Caveat', 'Cairo', cursive", fontSize: '18px' }} dangerouslySetInnerHTML={{ __html: note.content || '' }} />
+                      <div className="text-foreground/80 leading-[32px] whitespace-pre-wrap" style={{ fontFamily: "'Tajawal', 'Cairo', sans-serif", fontSize: '18px' }} dangerouslySetInnerHTML={{ __html: note.content || '' }} />
                     </div>
                   </motion.div>
                 </motion.div>
@@ -549,7 +670,7 @@ export default function CourseDetailPage() {
               <motion.div key={note.id} whileHover={{ y: -2 }} onClick={() => setExpandedNote(note.id)} className="note-paper rounded-xl p-5 relative group min-h-[160px] cursor-pointer shadow-sm" style={{ backgroundColor: note.color }}>
                 <button onClick={e => { e.stopPropagation(); if (window.confirm(t('حذف؟', 'Delete?'))) deleteNoteMutation.mutate(note.id); }} className="absolute top-2 end-2 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4 text-destructive" /></button>
                 <h4 className="font-semibold mb-2 text-foreground">{note.title}</h4>
-                <div className="text-sm text-foreground/70 line-clamp-4 leading-[32px]" style={{ fontFamily: "'Caveat', 'Cairo', cursive" }} dangerouslySetInnerHTML={{ __html: note.content || '' }} />
+                <div className="text-sm text-foreground/70 line-clamp-4 leading-[32px]" style={{ fontFamily: "'Tajawal', 'Cairo', sans-serif" }} dangerouslySetInnerHTML={{ __html: note.content || '' }} />
               </motion.div>
             ))}
           </div>

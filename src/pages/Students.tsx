@@ -76,6 +76,7 @@ export default function StudentsPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['students'] });
+      notify('student', t(`تم تحديث بيانات الطالب: ${editForm.name}`, `Student updated: ${editForm.name}`), `/students/${editingId}`);
       toast.success(t('تم تحديث بيانات الطالب', 'Student updated'));
       setEditingId(null);
     },
@@ -84,6 +85,7 @@ export default function StudentsPage() {
   const deleteStudentMutation = useMutation({
     mutationFn: async (id: string) => {
       const student = students.find(s => s.id === id);
+      await supabase.from('attendance').delete().eq('student_id', id);
       await supabase.from('enrollments').delete().eq('student_id', id);
       await supabase.from('payments').delete().eq('student_id', id);
       const { error } = await supabase.from('students').delete().eq('id', id);
@@ -102,6 +104,7 @@ export default function StudentsPage() {
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
       for (const id of ids) {
+        await supabase.from('attendance').delete().eq('student_id', id);
         await supabase.from('enrollments').delete().eq('student_id', id);
         await supabase.from('payments').delete().eq('student_id', id);
         await supabase.from('students').delete().eq('id', id);
@@ -156,11 +159,7 @@ export default function StudentsPage() {
   };
 
   const toggleSelect = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   };
 
   const getStudentCourses = (studentId: string) => enrollments.filter((e: any) => e.student_id === studentId);
@@ -182,18 +181,10 @@ export default function StudentsPage() {
     if (status === 'partial') return 'bg-warning/20 text-warning';
     return 'bg-destructive/20 text-destructive';
   };
-
   const statusLabel = (status: string) => {
     if (status === 'full') return t('مدفوع', 'Paid');
     if (status === 'partial') return t('جزئي', 'Partial');
     return t('غير مدفوع', 'Unpaid');
-  };
-
-  const confirmAction = (msg: string, cb: () => void) => {
-    const dialog = document.createElement('div');
-    if (localStorage.getItem('ibdaa-confirm') === 'disabled') { cb(); return; }
-    const ok = window.confirm(msg);
-    if (ok) cb();
   };
 
   return (
@@ -232,7 +223,7 @@ export default function StudentsPage() {
             <span className="text-sm font-medium">{t(`تم تحديد ${selectedIds.size} طالب`, `${selectedIds.size} selected`)}</span>
             <div className="flex gap-2">
               <button onClick={() => setShowBulkPayment(true)} className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium">{t('تعديل الدفع', 'Update Payment')}</button>
-              <button onClick={() => confirmAction(t('حذف الطلاب المحددين؟', 'Delete selected?'), () => bulkDeleteMutation.mutate(Array.from(selectedIds)))} className="px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium">{t('حذف', 'Delete')}</button>
+              <button onClick={() => { if (window.confirm(t('حذف الطلاب المحددين؟', 'Delete selected?'))) bulkDeleteMutation.mutate(Array.from(selectedIds)); }} className="px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium">{t('حذف', 'Delete')}</button>
             </div>
           </motion.div>
         )}
@@ -284,80 +275,61 @@ export default function StudentsPage() {
         )}
       </AnimatePresence>
 
+      {/* Students List - Row layout */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{[1, 2, 3].map(i => <div key={i} className="glass-card rounded-xl p-6 animate-pulse h-48" />)}</div>
+        <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="glass-card rounded-xl p-4 animate-pulse h-20" />)}</div>
       ) : filtered.length === 0 ? (
         <div className="glass-card rounded-xl p-12 text-center bg-card/60 backdrop-blur-xl border border-border/50">
           <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">{search || filterCourse || filterPayment ? t('لم يتم العثور على نتائج', 'No results found') : t('لا يوجد طلاب بعد', 'No students yet')}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="space-y-2">
           {filtered.map((student: any) => {
             const studentCourses = getStudentCourses(student.id);
             const pmts = getStudentPayments(student.id);
             const isUnpaid = hasUnpaidPayment(student.id);
             const isSelected = selectedIds.has(student.id);
             return (
-              <motion.div key={student.id} whileHover={{ y: -3 }} className={`glass-card rounded-2xl p-5 bg-card/60 backdrop-blur-xl border border-border/50 transition-all ${isUnpaid ? 'border-s-4 border-s-warning/60' : ''} ${isSelected ? 'ring-2 ring-primary' : ''}`}>
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-start gap-3">
+              <motion.div key={student.id} whileHover={{ x: 2 }} className={`glass-card rounded-xl p-4 bg-card/60 backdrop-blur-xl border border-border/50 transition-all ${isUnpaid ? 'border-s-4 border-s-warning/60' : ''} ${isSelected ? 'ring-2 ring-primary' : ''}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
                     {multiSelectMode && (
-                      <button onClick={() => toggleSelect(student.id)} className="mt-1">
+                      <button onClick={() => toggleSelect(student.id)}>
                         {isSelected ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5 text-muted-foreground" />}
                       </button>
                     )}
+                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <User className="w-4 h-4 text-primary" />
+                    </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-bold text-foreground cursor-pointer hover:text-primary transition-colors" onClick={() => navigate(`/students/${student.id}`)}>{student.name}</h3>
+                        <h3 className="font-semibold text-foreground cursor-pointer hover:text-primary transition-colors" onClick={() => navigate(`/students/${student.id}`)}>{student.name}</h3>
                         {isUnpaid && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-warning/20 to-destructive/10 text-warning font-medium">{t('متأخر', 'Due')}</span>}
                       </div>
-                      <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
                         {student.grade && <span>{student.grade}</span>}
                         {student.gender && <span>{student.gender === 'male' ? t('ذكر', 'Male') : t('أنثى', 'Female')}</span>}
                         {student.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{student.phone}</span>}
+                        {studentCourses.length > 0 && <span className="text-primary">{studentCourses.length} {t('دورات', 'courses')}</span>}
                       </div>
                     </div>
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex items-center gap-2">
+                    {/* Payment badges inline */}
+                    {pmts.length > 0 && (
+                      <div className="flex gap-1">
+                        {pmts.map((pmt: any) => (
+                          <span key={pmt.id} className={`text-[10px] px-2 py-0.5 rounded-full ${statusColor(pmt.status)}`}>
+                            {pmt.courses?.title?.slice(0, 8)}: {pmt.amount_paid}/{pmt.total_amount}₪
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <button onClick={() => startEdit(student)} className="p-2 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4 text-muted-foreground" /></button>
-                    <button onClick={() => confirmAction(t('حذف هذا الطالب؟', 'Delete student?'), () => deleteStudentMutation.mutate(student.id))} className="p-2 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                    <button onClick={() => { if (window.confirm(t('حذف هذا الطالب؟', 'Delete student?'))) deleteStudentMutation.mutate(student.id); }} className="p-2 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
                   </div>
                 </div>
-                {student.notes && <p className="text-sm text-muted-foreground mb-3">{student.notes}</p>}
-                {studentCourses.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-muted-foreground">{t('الدورات:', 'Courses:')}</p>
-                    {studentCourses.map((enr: any) => {
-                      const pmt = pmts.find((p: any) => p.course_id === enr.course_id);
-                      return (
-                        <div key={enr.id} className="flex items-center justify-between bg-muted/30 backdrop-blur-sm rounded-lg px-3 py-2">
-                          <div>
-                            <span className="text-sm text-foreground">{enr.courses?.title}</span>
-                            {enr.courses?.fees > 0 && <span className="text-xs text-muted-foreground ms-2">({enr.courses.fees} ₪)</span>}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {pmt && editPaymentId === pmt.id ? (
-                              <div className="flex items-center gap-1">
-                                <input type="number" value={editPaymentAmount} onChange={e => setEditPaymentAmount(e.target.value)} min={0} max={pmt.total_amount} className="w-20 px-2 py-1 rounded border border-input bg-background text-foreground text-xs" />
-                                <span className="text-xs text-muted-foreground">/ {pmt.total_amount} ₪</span>
-                                <button onClick={() => updatePaymentMutation.mutate({ id: pmt.id, amount: Number(editPaymentAmount) })} className="p-1 rounded hover:bg-success/10"><Check className="w-3.5 h-3.5 text-success" /></button>
-                                <button onClick={() => setEditPaymentId(null)} className="p-1 rounded hover:bg-muted"><X className="w-3.5 h-3.5" /></button>
-                              </div>
-                            ) : pmt ? (
-                              <button onClick={() => { setEditPaymentId(pmt.id); setEditPaymentAmount(String(pmt.amount_paid || '')); }} className="flex items-center gap-1">
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${statusColor(pmt.status)}`}>
-                                  {statusLabel(pmt.status)} ({pmt.amount_paid}/{pmt.total_amount} ₪)
-                                </span>
-                                <Edit2 className="w-3 h-3 text-muted-foreground" />
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
               </motion.div>
             );
           })}
