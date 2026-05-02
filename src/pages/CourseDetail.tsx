@@ -795,9 +795,6 @@ export default function CourseDetailPage() {
           {notes.length === 0 && <p className="text-center text-muted-foreground py-8">{t('لا توجد ملاحظات', 'No notes')}</p>}
         </div>
       )}
-          {notes.length === 0 && <p className="text-center text-muted-foreground py-8">{t('لا توجد ملاحظات', 'No notes')}</p>}
-        </div>
-      )}
 
       {/* Files Tab */}
       {tab === 'files' && (
