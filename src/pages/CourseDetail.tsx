@@ -630,7 +630,20 @@ export default function CourseDetailPage() {
                       ))}
                     </div>
                     <div className="note-paper rounded-xl p-6 min-h-[250px]" style={{ backgroundColor: noteForm.color }}>
-                      <div ref={noteContentRef} contentEditable suppressContentEditableWarning className="min-h-[210px] outline-none text-foreground leading-[32px] whitespace-pre-wrap" style={{ fontFamily: "'Tajawal', 'Cairo', sans-serif", fontSize: '18px', lineHeight: '32px' }} />
+                      <div
+                        ref={noteContentRef}
+                        contentEditable
+                        suppressContentEditableWarning
+                        onFocus={() => { try { document.execCommand('defaultParagraphSeparator', false, 'br'); } catch {} }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            document.execCommand('insertLineBreak');
+                          }
+                        }}
+                        className="min-h-[210px] outline-none text-foreground leading-[32px]"
+                        style={{ fontFamily: "'Tajawal', 'Cairo', sans-serif", fontSize: '18px', lineHeight: '32px', whiteSpace: 'pre-wrap' }}
+                      />
                     </div>
                     <button onClick={() => addNoteMutation.mutate()} disabled={!noteForm.title} className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold disabled:opacity-50">
                       {t('حفظ', 'Save')}
