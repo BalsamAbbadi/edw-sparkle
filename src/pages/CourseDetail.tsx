@@ -1,13 +1,13 @@
 import React, { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Users, StickyNote, FolderOpen, Calendar, ArrowRight, Plus, X, Trash2, Upload, Download, Edit2, Check, ExternalLink, Phone, CheckSquare, AlertTriangle } from 'lucide-react';
+import { BookOpen, Users, StickyNote, FolderOpen, Calendar, ArrowRight, Plus, X, Trash2, Upload, Download, Edit2, Check, ExternalLink, Phone, CheckSquare, Square, AlertTriangle, Pin, PinOff, Pin as PinIcon, Search } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { format, addDays, isBefore } from 'date-fns';
+import { format, addDays, isBefore, differenceInCalendarDays } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { useNotification } from '@/hooks/useNotification';
 
@@ -43,6 +43,8 @@ export default function CourseDetailPage() {
   const [editStudentId, setEditStudentId] = useState<string | null>(null);
   const [editStudentForm, setEditStudentForm] = useState({ name: '', grade: '', gender: '', notes: '', phone: '' });
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [noteSearch, setNoteSearch] = useState('');
   const [sessionNoteId, setSessionNoteId] = useState<string | null>(null);
   const [sessionNoteText, setSessionNoteText] = useState('');
 
