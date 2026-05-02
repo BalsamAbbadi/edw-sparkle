@@ -679,16 +679,23 @@ export default function CourseDetailPage() {
       {/* Notes Tab */}
       {tab === 'notes' && (
         <div className="space-y-4">
-          <button onClick={() => setShowAddNote(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">
-            <Plus className="w-4 h-4" />{t('ملاحظة جديدة', 'New Note')}
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => { setEditingNoteId(null); setNoteForm({ title: '', content: '', color: '#FEF3C7', is_checklist: false }); setShowAddNote(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">
+              <Plus className="w-4 h-4" />{t('ملاحظة جديدة', 'New Note')}
+            </button>
+            <div className="relative">
+              <Search className="absolute start-3 top-2.5 w-4 h-4 text-muted-foreground" />
+              <input value={noteSearch} onChange={e => setNoteSearch(e.target.value)} placeholder={t('بحث في الملاحظات...', 'Search notes...')} className="ps-10 pe-4 py-2 rounded-lg border border-input bg-background/50 backdrop-blur-sm text-foreground text-sm w-56 focus:ring-2 focus:ring-ring outline-none" />
+            </div>
+          </div>
+
           <AnimatePresence>
             {showAddNote && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 backdrop-blur-sm p-4">
-                <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-2xl bg-card rounded-2xl shadow-xl border border-border overflow-hidden max-h-[90vh] overflow-y-auto">
+                <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-2xl bg-card/90 backdrop-blur-xl rounded-2xl shadow-xl border border-border/50 overflow-hidden max-h-[90vh] overflow-y-auto">
                   <div className="flex justify-between items-center p-4 border-b border-border">
-                    <h3 className="font-bold">{t('ملاحظة جديدة', 'New Note')}</h3>
-                    <button onClick={() => setShowAddNote(false)}><X className="w-5 h-5" /></button>
+                    <h3 className="font-bold text-lg">{editingNoteId ? t('تعديل الملاحظة', 'Edit Note') : t('ملاحظة جديدة', 'New Note')}</h3>
+                    <button onClick={() => { setShowAddNote(false); setEditingNoteId(null); }}><X className="w-5 h-5" /></button>
                   </div>
                   <div className="p-4 space-y-4">
                     <input value={noteForm.title} onChange={e => setNoteForm(f => ({ ...f, title: e.target.value }))} placeholder={t('العنوان', 'Title')} className="w-full px-4 py-3 rounded-lg border border-input bg-background text-foreground text-lg font-semibold" />
@@ -697,7 +704,7 @@ export default function CourseDetailPage() {
                       {TEXT_COLORS.map(c => (
                         <button key={c.value} onClick={() => setSelectedTextColor(c.value)} className={`w-6 h-6 rounded-full border-2 transition-all ${selectedTextColor === c.value ? 'border-primary scale-110' : 'border-transparent'}`} style={{ backgroundColor: c.value }} />
                       ))}
-                      <button onClick={applyNoteColor} className="px-2 py-1 text-xs rounded bg-muted text-foreground">{t('تلوين', 'Color')}</button>
+                      <button onClick={applyNoteColor} className="px-2 py-1 text-xs rounded bg-muted text-foreground">{t('تلوين المحدد', 'Color selected')}</button>
                       <button onClick={insertChecklist} className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-muted text-foreground">
                         <CheckSquare className="w-3 h-3" />{t('مهمة', 'Task')}
                       </button>
@@ -725,7 +732,7 @@ export default function CourseDetailPage() {
                       />
                     </div>
                     <button onClick={() => addNoteMutation.mutate()} disabled={!noteForm.title} className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold disabled:opacity-50">
-                      {t('حفظ', 'Save')}
+                      {editingNoteId ? t('حفظ التعديلات', 'Save Changes') : t('حفظ', 'Save')}
                     </button>
                   </div>
                 </motion.div>
@@ -745,11 +752,15 @@ export default function CourseDetailPage() {
                       <div className="flex justify-between items-start mb-4">
                         <h2 className="text-2xl font-bold text-foreground">{note.title}</h2>
                         <div className="flex gap-2">
+                          <button onClick={() => togglePinNoteMutation.mutate({ noteId: note.id, pinned: !(note as any).is_pinned })} className="p-2 rounded-lg hover:bg-foreground/10">
+                            {(note as any).is_pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
+                          </button>
+                          <button onClick={() => { setExpandedNote(null); startEditNote(note); }} className="p-2 rounded-lg hover:bg-foreground/10"><Edit2 className="w-4 h-4" /></button>
                           <button onClick={() => { if (window.confirm(t('حذف؟', 'Delete?'))) { deleteNoteMutation.mutate(note.id); setExpandedNote(null); } }} className="p-2 rounded-lg hover:bg-foreground/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
                           <button onClick={() => setExpandedNote(null)} className="p-2 rounded-lg hover:bg-foreground/10"><X className="w-5 h-5" /></button>
                         </div>
                       </div>
-                      <div className="text-foreground/80 leading-[32px] whitespace-pre-wrap" style={{ fontFamily: "'Tajawal', 'Cairo', sans-serif", fontSize: '18px' }} dangerouslySetInnerHTML={{ __html: note.content || '' }} />
+                      {renderNoteInteractive(note)}
                     </div>
                   </motion.div>
                 </motion.div>
@@ -758,14 +769,32 @@ export default function CourseDetailPage() {
           </AnimatePresence>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {notes.map((note: any) => (
-              <motion.div key={note.id} whileHover={{ y: -2 }} onClick={() => setExpandedNote(note.id)} className="note-paper rounded-xl p-5 relative group min-h-[160px] cursor-pointer shadow-sm" style={{ backgroundColor: note.color }}>
-                <button onClick={e => { e.stopPropagation(); if (window.confirm(t('حذف؟', 'Delete?'))) deleteNoteMutation.mutate(note.id); }} className="absolute top-2 end-2 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4 text-destructive" /></button>
-                <h4 className="font-semibold mb-2 text-foreground">{note.title}</h4>
-                <div className="text-sm text-foreground/70 line-clamp-4 leading-[32px]" style={{ fontFamily: "'Tajawal', 'Cairo', sans-serif" }} dangerouslySetInnerHTML={{ __html: note.content || '' }} />
-              </motion.div>
-            ))}
+            {[...notes]
+              .filter((n: any) => {
+                const q = noteSearch.toLowerCase();
+                if (!q) return true;
+                return (n.title || '').toLowerCase().includes(q) || (n.content || '').replace(/<[^>]*>/g, '').toLowerCase().includes(q);
+              })
+              .sort((a: any, b: any) => ((b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0)))
+              .map((note: any) => (
+                <motion.div key={note.id} whileHover={{ y: -2 }} onClick={() => setExpandedNote(note.id)} className="note-paper rounded-xl p-5 relative group min-h-[160px] cursor-pointer shadow-sm" style={{ backgroundColor: note.color }}>
+                  <div className="absolute top-2 end-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                    {(note as any).is_pinned && <PinIcon className="w-4 h-4 text-primary" />}
+                    <button onClick={() => togglePinNoteMutation.mutate({ noteId: note.id, pinned: !(note as any).is_pinned })} className="p-1 rounded hover:bg-foreground/10">
+                      {(note as any).is_pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+                    </button>
+                    <button onClick={() => startEditNote(note)} className="p-1 rounded hover:bg-foreground/10"><Edit2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { if (window.confirm(t('حذف؟', 'Delete?'))) deleteNoteMutation.mutate(note.id); }} className="p-1 rounded hover:bg-foreground/10"><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
+                  </div>
+                  {(note as any).is_pinned && <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium mb-2 inline-block">📌 {t('مثبتة', 'Pinned')}</span>}
+                  <h4 className="font-semibold mb-2 text-foreground">{note.title}</h4>
+                  {renderNoteInteractive(note)}
+                </motion.div>
+              ))}
           </div>
+          {notes.length === 0 && <p className="text-center text-muted-foreground py-8">{t('لا توجد ملاحظات', 'No notes')}</p>}
+        </div>
+      )}
           {notes.length === 0 && <p className="text-center text-muted-foreground py-8">{t('لا توجد ملاحظات', 'No notes')}</p>}
         </div>
       )}
