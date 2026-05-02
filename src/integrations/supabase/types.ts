@@ -54,6 +54,7 @@ export type Database = {
           fees: number | null
           id: string
           is_archived: boolean | null
+          is_pinned: boolean
           payment_interval_sessions: number | null
           recurring_schedule: Json | null
           start_date: string | null
@@ -70,6 +71,7 @@ export type Database = {
           fees?: number | null
           id?: string
           is_archived?: boolean | null
+          is_pinned?: boolean
           payment_interval_sessions?: number | null
           recurring_schedule?: Json | null
           start_date?: string | null
@@ -86,6 +88,7 @@ export type Database = {
           fees?: number | null
           id?: string
           is_archived?: boolean | null
+          is_pinned?: boolean
           payment_interval_sessions?: number | null
           recurring_schedule?: Json | null
           start_date?: string | null
@@ -257,6 +260,7 @@ export type Database = {
           amount_paid: number
           course_id: string
           created_at: string
+          due_date: string | null
           id: string
           status: string
           student_id: string
@@ -268,6 +272,7 @@ export type Database = {
           amount_paid?: number
           course_id: string
           created_at?: string
+          due_date?: string | null
           id?: string
           status?: string
           student_id: string
@@ -279,6 +284,7 @@ export type Database = {
           amount_paid?: number
           course_id?: string
           created_at?: string
+          due_date?: string | null
           id?: string
           status?: string
           student_id?: string
@@ -422,6 +428,7 @@ export type Database = {
           gender: string | null
           grade: string | null
           id: string
+          is_pinned: boolean
           name: string
           notes: string | null
           phone: string | null
@@ -433,6 +440,7 @@ export type Database = {
           gender?: string | null
           grade?: string | null
           id?: string
+          is_pinned?: boolean
           name: string
           notes?: string | null
           phone?: string | null
@@ -444,6 +452,7 @@ export type Database = {
           gender?: string | null
           grade?: string | null
           id?: string
+          is_pinned?: boolean
           name?: string
           notes?: string | null
           phone?: string | null

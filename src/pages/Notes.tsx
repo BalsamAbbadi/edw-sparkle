@@ -289,8 +289,16 @@ export default function NotesPage() {
                     ref={contentRef}
                     contentEditable
                     suppressContentEditableWarning
-                    className="min-h-[310px] outline-none text-foreground leading-[32px] whitespace-pre-wrap"
-                    style={{ fontFamily, fontSize: '18px', lineHeight: '32px' }}
+                    onFocus={() => { try { document.execCommand('defaultParagraphSeparator', false, 'br'); } catch {} }}
+                    onKeyDown={(e) => {
+                      // Ensure Enter inserts a real line break in our editable area
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        document.execCommand('insertLineBreak');
+                      }
+                    }}
+                    className="min-h-[310px] outline-none text-foreground leading-[32px]"
+                    style={{ fontFamily, fontSize: '18px', lineHeight: '32px', whiteSpace: 'pre-wrap' }}
                     dangerouslySetInnerHTML={!editingNote ? { __html: form.content } : undefined}
                   />
                 </div>

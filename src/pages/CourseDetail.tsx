@@ -1,13 +1,13 @@
 import React, { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Users, StickyNote, FolderOpen, Calendar, ArrowRight, Plus, X, Trash2, Upload, Download, Edit2, Check, ExternalLink, Phone, CheckSquare, AlertTriangle } from 'lucide-react';
+import { BookOpen, Users, StickyNote, FolderOpen, Calendar, ArrowRight, Plus, X, Trash2, Upload, Download, Edit2, Check, ExternalLink, Phone, CheckSquare, Square, AlertTriangle, Pin, PinOff, Pin as PinIcon, Search } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { format, addDays, isBefore } from 'date-fns';
+import { format, addDays, isBefore, differenceInCalendarDays } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { useNotification } from '@/hooks/useNotification';
 
@@ -43,6 +43,8 @@ export default function CourseDetailPage() {
   const [editStudentId, setEditStudentId] = useState<string | null>(null);
   const [editStudentForm, setEditStudentForm] = useState({ name: '', grade: '', gender: '', notes: '', phone: '' });
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [noteSearch, setNoteSearch] = useState('');
   const [sessionNoteId, setSessionNoteId] = useState<string | null>(null);
   const [sessionNoteText, setSessionNoteText] = useState('');
 
@@ -225,20 +227,66 @@ export default function CourseDetailPage() {
   const addNoteMutation = useMutation({
     mutationFn: async () => {
       const contentHtml = noteContentRef.current?.innerHTML || noteForm.content;
-      const { error } = await supabase.from('notes').insert({
-        user_id: user!.id, course_id: id!, title: noteForm.title, content: contentHtml, color: noteForm.color, is_checklist: noteForm.is_checklist,
-      });
+      if (editingNoteId) {
+        const { error } = await supabase.from('notes').update({
+          title: noteForm.title, content: contentHtml, color: noteForm.color, is_checklist: noteForm.is_checklist,
+        }).eq('id', editingNoteId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('notes').insert({
+          user_id: user!.id, course_id: id!, title: noteForm.title, content: contentHtml, color: noteForm.color, is_checklist: noteForm.is_checklist,
+        });
+        if (error) throw error;
+        notify('note', t(`تمت إضافة ملاحظة في ${course?.title}`, `Note added in ${course?.title}`), `/courses/${id}`);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['course-notes', id] });
+      qc.invalidateQueries({ queryKey: ['all-notes'] });
+      toast.success(editingNoteId ? t('تم تعديل الملاحظة', 'Note updated') : t('تمت إضافة الملاحظة', 'Note added'));
+      setShowAddNote(false);
+      setEditingNoteId(null);
+      setNoteForm({ title: '', content: '', color: '#FEF3C7', is_checklist: false });
+    },
+  });
+
+  const togglePinNoteMutation = useMutation({
+    mutationFn: async ({ noteId, pinned }: { noteId: string; pinned: boolean }) => {
+      const { error } = await supabase.from('notes').update({ is_pinned: pinned } as any).eq('id', noteId);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['course-notes', id] });
       qc.invalidateQueries({ queryKey: ['all-notes'] });
-      notify('note', t(`تمت إضافة ملاحظة في ${course?.title}`, `Note added in ${course?.title}`), `/courses/${id}`);
-      toast.success(t('تمت إضافة الملاحظة', 'Note added'));
-      setShowAddNote(false);
-      setNoteForm({ title: '', content: '', color: '#FEF3C7', is_checklist: false });
     },
   });
+
+  const handleNoteCheckboxToggle = async (noteId: string, checkboxIndex: number) => {
+    const note = notes.find((n: any) => n.id === noteId);
+    if (!note) return;
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(note.content || '', 'text/html');
+    const checkboxes = doc.querySelectorAll('input[type="checkbox"]');
+    const cb = checkboxes[checkboxIndex] as HTMLInputElement | undefined;
+    if (!cb) return;
+    const wasChecked = cb.hasAttribute('checked');
+    if (wasChecked) cb.removeAttribute('checked'); else cb.setAttribute('checked', 'checked');
+    const span = cb.parentElement?.querySelector('span');
+    if (span) {
+      span.style.textDecoration = wasChecked ? 'none' : 'line-through';
+      span.style.opacity = wasChecked ? '1' : '0.5';
+    }
+    await supabase.from('notes').update({ content: doc.body.innerHTML }).eq('id', noteId);
+    qc.invalidateQueries({ queryKey: ['course-notes', id] });
+    qc.invalidateQueries({ queryKey: ['all-notes'] });
+  };
+
+  const startEditNote = (note: any) => {
+    setEditingNoteId(note.id);
+    setNoteForm({ title: note.title, content: note.content || '', color: note.color || '#FEF3C7', is_checklist: note.is_checklist || false });
+    setShowAddNote(true);
+    setTimeout(() => { if (noteContentRef.current) noteContentRef.current.innerHTML = note.content || ''; }, 100);
+  };
 
   const deleteNoteMutation = useMutation({
     mutationFn: async (noteId: string) => {
@@ -250,6 +298,37 @@ export default function CourseDetailPage() {
       qc.invalidateQueries({ queryKey: ['all-notes'] });
     },
   });
+
+  const renderNoteInteractive = (note: any) => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(note.content || '', 'text/html');
+    return (
+      <div className="text-foreground/80 leading-[32px]" style={{ fontFamily: "'Tajawal', 'Cairo', sans-serif", fontSize: '18px', whiteSpace: 'pre-wrap' }}>
+        {Array.from(doc.body.childNodes).map((node, idx) => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const el = node as HTMLElement;
+            if (el.classList.contains('checklist-item') || el.querySelector('input[type="checkbox"]')) {
+              const cb = el.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+              const span = el.querySelector('span');
+              const isChecked = cb?.hasAttribute('checked');
+              const allCbs = doc.querySelectorAll('input[type="checkbox"]');
+              let cbIndex = 0;
+              for (let i = 0; i < allCbs.length; i++) if (allCbs[i] === cb) { cbIndex = i; break; }
+              return (
+                <div key={idx} className="flex items-center gap-2 my-1 cursor-pointer" onClick={(e) => { e.stopPropagation(); handleNoteCheckboxToggle(note.id, cbIndex); }}>
+                  {isChecked ? <CheckSquare className="w-4 h-4 text-success shrink-0" /> : <Square className="w-4 h-4 text-muted-foreground shrink-0" />}
+                  <span style={{ textDecoration: isChecked ? 'line-through' : 'none', opacity: isChecked ? 0.5 : 1 }}>{span?.textContent || el.textContent || ''}</span>
+                </div>
+              );
+            }
+            return <div key={idx} dangerouslySetInnerHTML={{ __html: el.outerHTML }} />;
+          }
+          return <span key={idx}>{node.textContent}</span>;
+        })}
+      </div>
+    );
+  };
+
 
   const uploadFileMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -600,16 +679,23 @@ export default function CourseDetailPage() {
       {/* Notes Tab */}
       {tab === 'notes' && (
         <div className="space-y-4">
-          <button onClick={() => setShowAddNote(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">
-            <Plus className="w-4 h-4" />{t('ملاحظة جديدة', 'New Note')}
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => { setEditingNoteId(null); setNoteForm({ title: '', content: '', color: '#FEF3C7', is_checklist: false }); setShowAddNote(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">
+              <Plus className="w-4 h-4" />{t('ملاحظة جديدة', 'New Note')}
+            </button>
+            <div className="relative">
+              <Search className="absolute start-3 top-2.5 w-4 h-4 text-muted-foreground" />
+              <input value={noteSearch} onChange={e => setNoteSearch(e.target.value)} placeholder={t('بحث في الملاحظات...', 'Search notes...')} className="ps-10 pe-4 py-2 rounded-lg border border-input bg-background/50 backdrop-blur-sm text-foreground text-sm w-56 focus:ring-2 focus:ring-ring outline-none" />
+            </div>
+          </div>
+
           <AnimatePresence>
             {showAddNote && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 backdrop-blur-sm p-4">
-                <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-2xl bg-card rounded-2xl shadow-xl border border-border overflow-hidden max-h-[90vh] overflow-y-auto">
+                <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-2xl bg-card/90 backdrop-blur-xl rounded-2xl shadow-xl border border-border/50 overflow-hidden max-h-[90vh] overflow-y-auto">
                   <div className="flex justify-between items-center p-4 border-b border-border">
-                    <h3 className="font-bold">{t('ملاحظة جديدة', 'New Note')}</h3>
-                    <button onClick={() => setShowAddNote(false)}><X className="w-5 h-5" /></button>
+                    <h3 className="font-bold text-lg">{editingNoteId ? t('تعديل الملاحظة', 'Edit Note') : t('ملاحظة جديدة', 'New Note')}</h3>
+                    <button onClick={() => { setShowAddNote(false); setEditingNoteId(null); }}><X className="w-5 h-5" /></button>
                   </div>
                   <div className="p-4 space-y-4">
                     <input value={noteForm.title} onChange={e => setNoteForm(f => ({ ...f, title: e.target.value }))} placeholder={t('العنوان', 'Title')} className="w-full px-4 py-3 rounded-lg border border-input bg-background text-foreground text-lg font-semibold" />
@@ -618,7 +704,7 @@ export default function CourseDetailPage() {
                       {TEXT_COLORS.map(c => (
                         <button key={c.value} onClick={() => setSelectedTextColor(c.value)} className={`w-6 h-6 rounded-full border-2 transition-all ${selectedTextColor === c.value ? 'border-primary scale-110' : 'border-transparent'}`} style={{ backgroundColor: c.value }} />
                       ))}
-                      <button onClick={applyNoteColor} className="px-2 py-1 text-xs rounded bg-muted text-foreground">{t('تلوين', 'Color')}</button>
+                      <button onClick={applyNoteColor} className="px-2 py-1 text-xs rounded bg-muted text-foreground">{t('تلوين المحدد', 'Color selected')}</button>
                       <button onClick={insertChecklist} className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-muted text-foreground">
                         <CheckSquare className="w-3 h-3" />{t('مهمة', 'Task')}
                       </button>
@@ -630,10 +716,23 @@ export default function CourseDetailPage() {
                       ))}
                     </div>
                     <div className="note-paper rounded-xl p-6 min-h-[250px]" style={{ backgroundColor: noteForm.color }}>
-                      <div ref={noteContentRef} contentEditable suppressContentEditableWarning className="min-h-[210px] outline-none text-foreground leading-[32px] whitespace-pre-wrap" style={{ fontFamily: "'Tajawal', 'Cairo', sans-serif", fontSize: '18px', lineHeight: '32px' }} />
+                      <div
+                        ref={noteContentRef}
+                        contentEditable
+                        suppressContentEditableWarning
+                        onFocus={() => { try { document.execCommand('defaultParagraphSeparator', false, 'br'); } catch {} }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            document.execCommand('insertLineBreak');
+                          }
+                        }}
+                        className="min-h-[210px] outline-none text-foreground leading-[32px]"
+                        style={{ fontFamily: "'Tajawal', 'Cairo', sans-serif", fontSize: '18px', lineHeight: '32px', whiteSpace: 'pre-wrap' }}
+                      />
                     </div>
                     <button onClick={() => addNoteMutation.mutate()} disabled={!noteForm.title} className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold disabled:opacity-50">
-                      {t('حفظ', 'Save')}
+                      {editingNoteId ? t('حفظ التعديلات', 'Save Changes') : t('حفظ', 'Save')}
                     </button>
                   </div>
                 </motion.div>
@@ -653,11 +752,15 @@ export default function CourseDetailPage() {
                       <div className="flex justify-between items-start mb-4">
                         <h2 className="text-2xl font-bold text-foreground">{note.title}</h2>
                         <div className="flex gap-2">
+                          <button onClick={() => togglePinNoteMutation.mutate({ noteId: note.id, pinned: !(note as any).is_pinned })} className="p-2 rounded-lg hover:bg-foreground/10">
+                            {(note as any).is_pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
+                          </button>
+                          <button onClick={() => { setExpandedNote(null); startEditNote(note); }} className="p-2 rounded-lg hover:bg-foreground/10"><Edit2 className="w-4 h-4" /></button>
                           <button onClick={() => { if (window.confirm(t('حذف؟', 'Delete?'))) { deleteNoteMutation.mutate(note.id); setExpandedNote(null); } }} className="p-2 rounded-lg hover:bg-foreground/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
                           <button onClick={() => setExpandedNote(null)} className="p-2 rounded-lg hover:bg-foreground/10"><X className="w-5 h-5" /></button>
                         </div>
                       </div>
-                      <div className="text-foreground/80 leading-[32px] whitespace-pre-wrap" style={{ fontFamily: "'Tajawal', 'Cairo', sans-serif", fontSize: '18px' }} dangerouslySetInnerHTML={{ __html: note.content || '' }} />
+                      {renderNoteInteractive(note)}
                     </div>
                   </motion.div>
                 </motion.div>
@@ -666,13 +769,28 @@ export default function CourseDetailPage() {
           </AnimatePresence>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {notes.map((note: any) => (
-              <motion.div key={note.id} whileHover={{ y: -2 }} onClick={() => setExpandedNote(note.id)} className="note-paper rounded-xl p-5 relative group min-h-[160px] cursor-pointer shadow-sm" style={{ backgroundColor: note.color }}>
-                <button onClick={e => { e.stopPropagation(); if (window.confirm(t('حذف؟', 'Delete?'))) deleteNoteMutation.mutate(note.id); }} className="absolute top-2 end-2 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4 text-destructive" /></button>
-                <h4 className="font-semibold mb-2 text-foreground">{note.title}</h4>
-                <div className="text-sm text-foreground/70 line-clamp-4 leading-[32px]" style={{ fontFamily: "'Tajawal', 'Cairo', sans-serif" }} dangerouslySetInnerHTML={{ __html: note.content || '' }} />
-              </motion.div>
-            ))}
+            {[...notes]
+              .filter((n: any) => {
+                const q = noteSearch.toLowerCase();
+                if (!q) return true;
+                return (n.title || '').toLowerCase().includes(q) || (n.content || '').replace(/<[^>]*>/g, '').toLowerCase().includes(q);
+              })
+              .sort((a: any, b: any) => ((b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0)))
+              .map((note: any) => (
+                <motion.div key={note.id} whileHover={{ y: -2 }} onClick={() => setExpandedNote(note.id)} className="note-paper rounded-xl p-5 relative group min-h-[160px] cursor-pointer shadow-sm" style={{ backgroundColor: note.color }}>
+                  <div className="absolute top-2 end-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                    {(note as any).is_pinned && <PinIcon className="w-4 h-4 text-primary" />}
+                    <button onClick={() => togglePinNoteMutation.mutate({ noteId: note.id, pinned: !(note as any).is_pinned })} className="p-1 rounded hover:bg-foreground/10">
+                      {(note as any).is_pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+                    </button>
+                    <button onClick={() => startEditNote(note)} className="p-1 rounded hover:bg-foreground/10"><Edit2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { if (window.confirm(t('حذف؟', 'Delete?'))) deleteNoteMutation.mutate(note.id); }} className="p-1 rounded hover:bg-foreground/10"><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
+                  </div>
+                  {(note as any).is_pinned && <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium mb-2 inline-block">📌 {t('مثبتة', 'Pinned')}</span>}
+                  <h4 className="font-semibold mb-2 text-foreground">{note.title}</h4>
+                  {renderNoteInteractive(note)}
+                </motion.div>
+              ))}
           </div>
           {notes.length === 0 && <p className="text-center text-muted-foreground py-8">{t('لا توجد ملاحظات', 'No notes')}</p>}
         </div>
