@@ -466,7 +466,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      cleanup_old_payment_logs: { Args: never; Returns: undefined }
+      [_ in never]: never
     }
     Enums: {
       [_ in never]: never
