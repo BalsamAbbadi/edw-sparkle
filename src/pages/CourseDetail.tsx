@@ -227,20 +227,66 @@ export default function CourseDetailPage() {
   const addNoteMutation = useMutation({
     mutationFn: async () => {
       const contentHtml = noteContentRef.current?.innerHTML || noteForm.content;
-      const { error } = await supabase.from('notes').insert({
-        user_id: user!.id, course_id: id!, title: noteForm.title, content: contentHtml, color: noteForm.color, is_checklist: noteForm.is_checklist,
-      });
+      if (editingNoteId) {
+        const { error } = await supabase.from('notes').update({
+          title: noteForm.title, content: contentHtml, color: noteForm.color, is_checklist: noteForm.is_checklist,
+        }).eq('id', editingNoteId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('notes').insert({
+          user_id: user!.id, course_id: id!, title: noteForm.title, content: contentHtml, color: noteForm.color, is_checklist: noteForm.is_checklist,
+        });
+        if (error) throw error;
+        notify('note', t(`تمت إضافة ملاحظة في ${course?.title}`, `Note added in ${course?.title}`), `/courses/${id}`);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['course-notes', id] });
+      qc.invalidateQueries({ queryKey: ['all-notes'] });
+      toast.success(editingNoteId ? t('تم تعديل الملاحظة', 'Note updated') : t('تمت إضافة الملاحظة', 'Note added'));
+      setShowAddNote(false);
+      setEditingNoteId(null);
+      setNoteForm({ title: '', content: '', color: '#FEF3C7', is_checklist: false });
+    },
+  });
+
+  const togglePinNoteMutation = useMutation({
+    mutationFn: async ({ noteId, pinned }: { noteId: string; pinned: boolean }) => {
+      const { error } = await supabase.from('notes').update({ is_pinned: pinned } as any).eq('id', noteId);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['course-notes', id] });
       qc.invalidateQueries({ queryKey: ['all-notes'] });
-      notify('note', t(`تمت إضافة ملاحظة في ${course?.title}`, `Note added in ${course?.title}`), `/courses/${id}`);
-      toast.success(t('تمت إضافة الملاحظة', 'Note added'));
-      setShowAddNote(false);
-      setNoteForm({ title: '', content: '', color: '#FEF3C7', is_checklist: false });
     },
   });
+
+  const handleNoteCheckboxToggle = async (noteId: string, checkboxIndex: number) => {
+    const note = notes.find((n: any) => n.id === noteId);
+    if (!note) return;
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(note.content || '', 'text/html');
+    const checkboxes = doc.querySelectorAll('input[type="checkbox"]');
+    const cb = checkboxes[checkboxIndex] as HTMLInputElement | undefined;
+    if (!cb) return;
+    const wasChecked = cb.hasAttribute('checked');
+    if (wasChecked) cb.removeAttribute('checked'); else cb.setAttribute('checked', 'checked');
+    const span = cb.parentElement?.querySelector('span');
+    if (span) {
+      span.style.textDecoration = wasChecked ? 'none' : 'line-through';
+      span.style.opacity = wasChecked ? '1' : '0.5';
+    }
+    await supabase.from('notes').update({ content: doc.body.innerHTML }).eq('id', noteId);
+    qc.invalidateQueries({ queryKey: ['course-notes', id] });
+    qc.invalidateQueries({ queryKey: ['all-notes'] });
+  };
+
+  const startEditNote = (note: any) => {
+    setEditingNoteId(note.id);
+    setNoteForm({ title: note.title, content: note.content || '', color: note.color || '#FEF3C7', is_checklist: note.is_checklist || false });
+    setShowAddNote(true);
+    setTimeout(() => { if (noteContentRef.current) noteContentRef.current.innerHTML = note.content || ''; }, 100);
+  };
 
   const deleteNoteMutation = useMutation({
     mutationFn: async (noteId: string) => {
@@ -252,6 +298,37 @@ export default function CourseDetailPage() {
       qc.invalidateQueries({ queryKey: ['all-notes'] });
     },
   });
+
+  const renderNoteInteractive = (note: any) => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(note.content || '', 'text/html');
+    return (
+      <div className="text-foreground/80 leading-[32px]" style={{ fontFamily: "'Tajawal', 'Cairo', sans-serif", fontSize: '18px', whiteSpace: 'pre-wrap' }}>
+        {Array.from(doc.body.childNodes).map((node, idx) => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const el = node as HTMLElement;
+            if (el.classList.contains('checklist-item') || el.querySelector('input[type="checkbox"]')) {
+              const cb = el.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+              const span = el.querySelector('span');
+              const isChecked = cb?.hasAttribute('checked');
+              const allCbs = doc.querySelectorAll('input[type="checkbox"]');
+              let cbIndex = 0;
+              for (let i = 0; i < allCbs.length; i++) if (allCbs[i] === cb) { cbIndex = i; break; }
+              return (
+                <div key={idx} className="flex items-center gap-2 my-1 cursor-pointer" onClick={(e) => { e.stopPropagation(); handleNoteCheckboxToggle(note.id, cbIndex); }}>
+                  {isChecked ? <CheckSquare className="w-4 h-4 text-success shrink-0" /> : <Square className="w-4 h-4 text-muted-foreground shrink-0" />}
+                  <span style={{ textDecoration: isChecked ? 'line-through' : 'none', opacity: isChecked ? 0.5 : 1 }}>{span?.textContent || el.textContent || ''}</span>
+                </div>
+              );
+            }
+            return <div key={idx} dangerouslySetInnerHTML={{ __html: el.outerHTML }} />;
+          }
+          return <span key={idx}>{node.textContent}</span>;
+        })}
+      </div>
+    );
+  };
+
 
   const uploadFileMutation = useMutation({
     mutationFn: async (file: File) => {
