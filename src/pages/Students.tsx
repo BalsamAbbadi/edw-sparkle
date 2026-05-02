@@ -164,7 +164,9 @@ export default function StudentsPage() {
 
   const getStudentCourses = (studentId: string) => enrollments.filter((e: any) => e.student_id === studentId);
   const getStudentPayments = (studentId: string) => payments.filter((p: any) => p.student_id === studentId);
-  const hasUnpaidPayment = (studentId: string) => getStudentPayments(studentId).some((p: any) => p.status === 'unpaid' || p.status === 'partial');
+  // "Late" = unpaid/partial AND due_date is in the past
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const hasLatePayment = (studentId: string) => getStudentPayments(studentId).some((p: any) => p.status !== 'full' && p.due_date && p.due_date < todayStr);
 
   let filtered = students.filter((s: any) => s.name.toLowerCase().includes(search.toLowerCase()));
   if (filterCourse) {
@@ -288,10 +290,10 @@ export default function StudentsPage() {
           {filtered.map((student: any) => {
             const studentCourses = getStudentCourses(student.id);
             const pmts = getStudentPayments(student.id);
-            const isUnpaid = hasUnpaidPayment(student.id);
+            const isLate = hasLatePayment(student.id);
             const isSelected = selectedIds.has(student.id);
             return (
-              <motion.div key={student.id} whileHover={{ x: 2 }} className={`glass-card rounded-xl p-4 bg-card/60 backdrop-blur-xl border border-border/50 transition-all ${isUnpaid ? 'border-s-4 border-s-warning/60' : ''} ${isSelected ? 'ring-2 ring-primary' : ''}`}>
+              <motion.div key={student.id} whileHover={{ x: 2 }} className={`glass-card rounded-xl p-4 bg-card/60 backdrop-blur-xl border border-border/50 transition-all ${isLate ? 'border-s-4 border-s-destructive/60' : ''} ${isSelected ? 'ring-2 ring-primary' : ''}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     {multiSelectMode && (
@@ -305,7 +307,7 @@ export default function StudentsPage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-foreground cursor-pointer hover:text-primary transition-colors" onClick={() => navigate(`/students/${student.id}`)}>{student.name}</h3>
-                        {isUnpaid && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-warning/20 to-destructive/10 text-warning font-medium">{t('متأخر', 'Due')}</span>}
+                        {isLate && <span className="text-[10px] px-2 py-0.5 rounded-full bg-destructive/20 text-destructive font-medium">{t('متأخر', 'Late')}</span>}
                       </div>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
                         {student.grade && <span>{student.grade}</span>}
