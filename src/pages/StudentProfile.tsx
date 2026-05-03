@@ -76,6 +76,16 @@ export default function StudentProfile() {
     enabled: enrollments.length > 0,
   });
 
+  // Realtime sync for student-related changes
+  useEffect(() => {
+    if (!id) return;
+    const ch = supabase.channel(`student-${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance', filter: `student_id=eq.${id}` }, () => qc.invalidateQueries({ queryKey: ['student-attendance', id] }))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: `student_id=eq.${id}` }, () => qc.invalidateQueries({ queryKey: ['student-payments', id] }))
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [id, qc]);
+
   const updateStudentMutation = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from('students').update({
