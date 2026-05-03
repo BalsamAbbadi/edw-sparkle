@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, Calendar, Users, Check, X, Edit2, CheckSquare, Square, StickyNote, User } from 'lucide-react';
@@ -52,6 +52,15 @@ export default function SessionProfile() {
     },
     enabled: !!id && !!user,
   });
+
+  // Realtime sync attendance for this session
+  useEffect(() => {
+    if (!id) return;
+    const ch = supabase.channel(`att-${id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'attendance', filter: `session_id=eq.${id}` }, () => {
+      qc.invalidateQueries({ queryKey: ['session-attendance', id] });
+    }).subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [id, qc]);
 
   const toggleAttendanceMutation = useMutation({
     mutationFn: async ({ studentId, isPresent }: { studentId: string; isPresent: boolean }) => {

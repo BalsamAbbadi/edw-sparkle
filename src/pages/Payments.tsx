@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CreditCard, Edit2, Check, X } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -16,6 +16,15 @@ export default function PaymentsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editAmount, setEditAmount] = useState('');
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+
+  // Auto-cleanup: remove payment notifications older than 7 days
+  useEffect(() => {
+    if (!user) return;
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    supabase.from('notifications').delete().eq('type', 'payment').lt('created_at', cutoff).then(() => {
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+    });
+  }, [user, qc]);
 
   const { data: payments = [], isLoading } = useQuery({
     queryKey: ['payments'],

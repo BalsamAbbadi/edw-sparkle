@@ -55,15 +55,33 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
+  const today = format(new Date(), 'yyyy-MM-dd');
   const { data: todaySessions = [] } = useQuery({
     queryKey: ['today-sessions'],
     queryFn: async () => {
-      const today = format(new Date(), 'yyyy-MM-dd');
       const { data, error } = await supabase.from('sessions').select('*, courses(title)').eq('session_date', today).order('start_time', { ascending: true });
       if (error) throw error;
       return data;
     },
     enabled: !!user,
+  });
+
+  const { data: lastSessionCourses = [] } = useQuery({
+    queryKey: ['last-session-courses', today],
+    queryFn: async () => {
+      const courseIds = todaySessions.map((s: any) => s.course_id).filter(Boolean);
+      if (courseIds.length === 0) return [];
+      const { data, error } = await supabase.from('sessions').select('course_id, session_date, courses(title)').in('course_id', courseIds);
+      if (error) throw error;
+      const lastByCourse: Record<string, string> = {};
+      const titles: Record<string, string> = {};
+      data.forEach((s: any) => {
+        if (!lastByCourse[s.course_id] || s.session_date > lastByCourse[s.course_id]) lastByCourse[s.course_id] = s.session_date;
+        titles[s.course_id] = s.courses?.title || '';
+      });
+      return Object.entries(lastByCourse).filter(([, d]) => d === today).map(([cid]) => titles[cid]);
+    },
+    enabled: !!user && todaySessions.length > 0,
   });
 
   const displayName = profile?.display_name || user?.email?.split('@')[0] || '';
@@ -108,6 +126,14 @@ export default function Dashboard() {
       </div>
 
       {/* Today's Sessions Summary */}
+      {lastSessionCourses.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-card rounded-2xl p-4 bg-warning/10 border border-warning/30">
+          {lastSessionCourses.map((title: string) => (
+            <p key={title} className="text-sm font-medium text-warning-foreground">⭐ {t(`اليوم آخر حصة في دورة ${title}`, `Today is the last session of ${title}`)}</p>
+          ))}
+        </motion.div>
+      )}
+
       {todaySessions.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card rounded-2xl p-5 bg-card/80 backdrop-blur-md border border-border/50">
           <div className="flex items-center gap-3 mb-3">
