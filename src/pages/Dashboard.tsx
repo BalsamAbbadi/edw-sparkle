@@ -126,6 +126,14 @@ export default function Dashboard() {
       </div>
 
       {/* Today's Sessions Summary */}
+      {lastSessionCourses.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-card rounded-2xl p-4 bg-warning/10 border border-warning/30">
+          {lastSessionCourses.map((title: string) => (
+            <p key={title} className="text-sm font-medium text-warning-foreground">⭐ {t(`اليوم آخر حصة في دورة ${title}`, `Today is the last session of ${title}`)}</p>
+          ))}
+        </motion.div>
+      )}
+
       {todaySessions.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card rounded-2xl p-5 bg-card/80 backdrop-blur-md border border-border/50">
           <div className="flex items-center gap-3 mb-3">
