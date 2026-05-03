@@ -64,41 +64,41 @@ export default function SessionProfile() {
 
   const toggleAttendanceMutation = useMutation({
     mutationFn: async ({ studentId, isPresent }: { studentId: string; isPresent: boolean }) => {
-      const existing = attendanceRecords.find((a: any) => a.student_id === studentId);
-      if (existing) {
-        await supabase.from('attendance').update({ is_present: isPresent }).eq('id', existing.id);
-      } else {
-        await supabase.from('attendance').insert({
-          session_id: id!, student_id: studentId, course_id: session!.course_id, user_id: user!.id, is_present: isPresent,
-        });
-      }
+      const { error } = await supabase.from('attendance').upsert({
+        session_id: id!, student_id: studentId, course_id: session!.course_id, user_id: user!.id, is_present: isPresent,
+      }, { onConflict: 'session_id,student_id' });
+      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['session-attendance', id] });
       qc.invalidateQueries({ queryKey: ['student-attendance'] });
       qc.invalidateQueries({ queryKey: ['attendance-counts'] });
+      qc.invalidateQueries({ queryKey: ['student-payments'] });
+      qc.invalidateQueries({ queryKey: ['course-payments'] });
+      qc.invalidateQueries({ queryKey: ['payments'] });
     },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const markAllPresentMutation = useMutation({
     mutationFn: async () => {
-      for (const enr of enrollments) {
-        const existing = attendanceRecords.find((a: any) => a.student_id === enr.student_id);
-        if (existing) {
-          await supabase.from('attendance').update({ is_present: true }).eq('id', existing.id);
-        } else {
-          await supabase.from('attendance').insert({
-            session_id: id!, student_id: enr.student_id, course_id: session!.course_id, user_id: user!.id, is_present: true,
-          });
-        }
-      }
+      const rows = enrollments.map((enr: any) => ({
+        session_id: id!, student_id: enr.student_id, course_id: session!.course_id, user_id: user!.id, is_present: true,
+      }));
+      if (rows.length === 0) return;
+      const { error } = await supabase.from('attendance').upsert(rows, { onConflict: 'session_id,student_id' });
+      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['session-attendance', id] });
       qc.invalidateQueries({ queryKey: ['student-attendance'] });
       qc.invalidateQueries({ queryKey: ['attendance-counts'] });
+      qc.invalidateQueries({ queryKey: ['student-payments'] });
+      qc.invalidateQueries({ queryKey: ['course-payments'] });
+      qc.invalidateQueries({ queryKey: ['payments'] });
       toast.success(t('تم تسجيل حضور الجميع', 'All marked present'));
     },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const updateSessionMutation = useMutation({
