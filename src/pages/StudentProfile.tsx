@@ -61,11 +61,14 @@ export default function StudentProfile() {
       return data;
     },
     enabled: !!id && !!user,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   // For each course, get total sessions done (past date)
   const { data: allSessions = [] } = useQuery({
-    queryKey: ['all-sessions-for-student'],
+    queryKey: ['all-sessions-for-student', id, enrollments.map((e: any) => e.course_id).join(',')],
     queryFn: async () => {
       const courseIds = enrollments.map((e: any) => e.course_id);
       if (courseIds.length === 0) return [];
@@ -74,6 +77,7 @@ export default function StudentProfile() {
       return data;
     },
     enabled: enrollments.length > 0,
+    refetchOnMount: 'always',
   });
 
   // Realtime sync for student-related changes
