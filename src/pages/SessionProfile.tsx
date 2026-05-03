@@ -76,6 +76,7 @@ export default function SessionProfile() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['session-attendance', id] });
       qc.invalidateQueries({ queryKey: ['student-attendance'] });
+      qc.invalidateQueries({ queryKey: ['attendance-counts'] });
     },
   });
 
@@ -94,6 +95,8 @@ export default function SessionProfile() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['session-attendance', id] });
+      qc.invalidateQueries({ queryKey: ['student-attendance'] });
+      qc.invalidateQueries({ queryKey: ['attendance-counts'] });
       toast.success(t('تم تسجيل حضور الجميع', 'All marked present'));
     },
   });
