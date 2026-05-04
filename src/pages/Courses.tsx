@@ -15,6 +15,8 @@ interface CourseForm {
   description: string;
   duration: string;
   fees: number | '';
+  payment_type: 'full' | 'per_session';
+  price_per_session: number | '';
   totalSessions: number;
   startDate: string;
   sessionColor: string;
@@ -58,6 +60,7 @@ const SESSION_COLORS = [
 
 const emptyForm: CourseForm = {
   title: '', description: '', duration: '', fees: '', totalSessions: 16,
+  payment_type: 'full', price_per_session: '',
   startDate: format(new Date(), 'yyyy-MM-dd'), sessionColor: SESSION_COLORS[0],
   course_type: 'long', payment_interval_sessions: 0,
   recurring_schedule: []
@@ -141,18 +144,19 @@ export default function CoursesPage() {
   const saveMutation = useMutation({
     mutationFn: async (formData: CourseForm) => {
       const fees = formData.fees === '' ? 0 : Number(formData.fees);
+      const pricePerSession = formData.price_per_session === '' ? 0 : Number(formData.price_per_session);
       if (editingId) {
         const { error } = await supabase.from('courses').update({
           title: formData.title, description: formData.description, duration: formData.duration, fees, recurring_schedule: formData.recurring_schedule as any,
           course_type: formData.course_type, payment_interval_sessions: formData.payment_interval_sessions,
+          payment_type: formData.payment_type, price_per_session: pricePerSession,
         } as any).eq('id', editingId);
         if (error) throw error;
-        // Update total_amount in payments when fees change
-        await supabase.from('payments').update({ total_amount: fees } as any).eq('course_id', editingId);
       } else {
         const { data: course, error } = await supabase.from('courses').insert({
           user_id: user!.id, title: formData.title, description: formData.description, duration: formData.duration, fees, recurring_schedule: formData.recurring_schedule as any,
           course_type: formData.course_type, payment_interval_sessions: formData.payment_interval_sessions, start_date: formData.startDate,
+          payment_type: formData.payment_type, price_per_session: pricePerSession,
         } as any).select().single();
         if (error) throw error;
         await createSessions(course.id, formData.title, formData.recurring_schedule, formData.totalSessions, formData.startDate, formData.sessionColor);
@@ -229,6 +233,8 @@ export default function CoursesPage() {
     setForm({
       title: course.title, description: course.description || '', duration: course.duration || '',
       fees: course.fees || '', totalSessions: 16, startDate: format(new Date(), 'yyyy-MM-dd'),
+      payment_type: (course as any).payment_type || 'full',
+      price_per_session: (course as any).price_per_session || '',
       sessionColor: SESSION_COLORS[0],
       course_type: (course as any).course_type || 'long',
       payment_interval_sessions: (course as any).payment_interval_sessions || 0,
