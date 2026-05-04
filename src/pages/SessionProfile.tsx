@@ -69,13 +69,32 @@ export default function SessionProfile() {
       }, { onConflict: 'session_id,student_id' });
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async (_data, variables) => {
+      qc.setQueryData(['session-attendance', id], (prev: any[] | undefined) => {
+        const current = Array.isArray(prev) ? prev : [];
+        const existing = current.find((item) => item.student_id === variables.studentId);
+        if (existing) {
+          return current.map((item) => item.student_id === variables.studentId ? { ...item, is_present: variables.isPresent } : item);
+        }
+        return [...current, {
+          session_id: id,
+          student_id: variables.studentId,
+          course_id: session?.course_id,
+          user_id: user?.id,
+          is_present: variables.isPresent,
+        }];
+      });
       qc.invalidateQueries({ queryKey: ['session-attendance', id] });
       qc.invalidateQueries({ queryKey: ['student-attendance'] });
-      qc.invalidateQueries({ queryKey: ['attendance-counts'] });
+      qc.invalidateQueries({ queryKey: ['student'] });
       qc.invalidateQueries({ queryKey: ['student-payments'] });
+      qc.invalidateQueries({ queryKey: ['attendance-counts'] });
       qc.invalidateQueries({ queryKey: ['course-payments'] });
+      qc.invalidateQueries({ queryKey: ['payments-by-course'] });
       qc.invalidateQueries({ queryKey: ['payments'] });
+      qc.invalidateQueries({ queryKey: ['all-payments-income'] });
+      qc.invalidateQueries({ queryKey: ['students'] });
+      qc.invalidateQueries({ queryKey: ['all-enrollments'] });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -92,10 +111,15 @@ export default function SessionProfile() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['session-attendance', id] });
       qc.invalidateQueries({ queryKey: ['student-attendance'] });
-      qc.invalidateQueries({ queryKey: ['attendance-counts'] });
+      qc.invalidateQueries({ queryKey: ['student'] });
       qc.invalidateQueries({ queryKey: ['student-payments'] });
+      qc.invalidateQueries({ queryKey: ['attendance-counts'] });
       qc.invalidateQueries({ queryKey: ['course-payments'] });
+      qc.invalidateQueries({ queryKey: ['payments-by-course'] });
       qc.invalidateQueries({ queryKey: ['payments'] });
+      qc.invalidateQueries({ queryKey: ['all-payments-income'] });
+      qc.invalidateQueries({ queryKey: ['students'] });
+      qc.invalidateQueries({ queryKey: ['all-enrollments'] });
       toast.success(t('تم تسجيل حضور الجميع', 'All marked present'));
     },
     onError: (e: any) => toast.error(e.message),
