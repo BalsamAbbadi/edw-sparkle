@@ -56,6 +56,8 @@ export type Database = {
           is_archived: boolean | null
           is_pinned: boolean
           payment_interval_sessions: number | null
+          payment_type: string
+          price_per_session: number
           recurring_schedule: Json | null
           start_date: string | null
           title: string
@@ -73,6 +75,8 @@ export type Database = {
           is_archived?: boolean | null
           is_pinned?: boolean
           payment_interval_sessions?: number | null
+          payment_type?: string
+          price_per_session?: number
           recurring_schedule?: Json | null
           start_date?: string | null
           title: string
@@ -90,6 +94,8 @@ export type Database = {
           is_archived?: boolean | null
           is_pinned?: boolean
           payment_interval_sessions?: number | null
+          payment_type?: string
+          price_per_session?: number
           recurring_schedule?: Json | null
           start_date?: string | null
           title?: string
@@ -258,10 +264,13 @@ export type Database = {
       payments: {
         Row: {
           amount_paid: number
+          attended_sessions_count: number
           course_id: string
           created_at: string
           due_date: string | null
+          expected_amount: number
           id: string
+          remaining_amount: number
           status: string
           student_id: string
           total_amount: number
@@ -270,10 +279,13 @@ export type Database = {
         }
         Insert: {
           amount_paid?: number
+          attended_sessions_count?: number
           course_id: string
           created_at?: string
           due_date?: string | null
+          expected_amount?: number
           id?: string
+          remaining_amount?: number
           status?: string
           student_id: string
           total_amount?: number
@@ -282,10 +294,13 @@ export type Database = {
         }
         Update: {
           amount_paid?: number
+          attended_sessions_count?: number
           course_id?: string
           created_at?: string
           due_date?: string | null
+          expected_amount?: number
           id?: string
+          remaining_amount?: number
           status?: string
           student_id?: string
           total_amount?: number
@@ -466,7 +481,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      recalculate_course_payments: {
+        Args: { _course_id: string }
+        Returns: undefined
+      }
+      recalculate_single_payment: {
+        Args: { _course_id: string; _student_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
