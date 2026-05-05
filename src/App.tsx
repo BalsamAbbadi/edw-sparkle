@@ -7,6 +7,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
+import { RealtimeSync } from "@/components/RealtimeSync";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { useState } from "react";
 
@@ -84,6 +85,7 @@ const App = () => {
         <ThemeProvider>
           <AuthProvider>
             <TooltipProvider>
+              <RealtimeSync />
               <Toaster />
               <Sonner />
               <BrowserRouter>
