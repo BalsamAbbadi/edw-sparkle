@@ -46,7 +46,7 @@ export default function StudentProfile() {
   const { data: payments = [] } = useQuery({
     queryKey: ['student-payments', id],
     queryFn: async () => {
-      const { data, error } = await supabase.from('payments').select('*, courses(title, fees)').eq('student_id', id!);
+      const { data, error } = await supabase.from('payments').select('*, courses(title, fees, payment_type, price_per_session)').eq('student_id', id!);
       if (error) throw error;
       return data;
     },
@@ -200,7 +200,11 @@ export default function StudentProfile() {
             const courseSessions = allSessions.filter((s: any) => s.course_id === enr.course_id);
             const pastSessions = courseSessions.filter((s: any) => s.session_date <= today);
             const studentAttendance = attendance.filter((a: any) => a.course_id === enr.course_id);
-            const attended = studentAttendance.filter((a: any) => a.is_present).length;
+            const attended = payment?.attended_sessions_count ?? studentAttendance.filter((a: any) => (a.attended ?? a.is_present) && (a.sessions?.session_date || '') <= today).length;
+            const missed = Math.max(pastSessions.length - attended, 0);
+            const expectedAmount = Number(payment?.expected_amount || 0);
+            const paidAmount = Number(payment?.amount_paid || 0);
+            const remainingAmount = Number(payment?.remaining_amount || 0);
 
             return (
               <div key={enr.id} className="glass-card rounded-2xl p-5 bg-card/60 backdrop-blur-xl border border-border/50 space-y-4">
@@ -249,7 +253,13 @@ export default function StudentProfile() {
                       <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pastSessions.length > 0 ? (attended / pastSessions.length) * 100 : 0}%` }} />
                     </div>
                   )}
-                  <p className="text-xs text-muted-foreground mt-1">{t(`إجمالي الحصص: ${courseSessions.length}`, `Total sessions: ${courseSessions.length}`)}</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                    <p>{t(`إجمالي الحصص: ${courseSessions.length}`, `Total sessions: ${courseSessions.length}`)}</p>
+                    <p>{t(`الغياب: ${missed}`, `Missed: ${missed}`)}</p>
+                    <p>{t(`المستحق: ${expectedAmount} ₪`, `Due: ${expectedAmount} ₪`)}</p>
+                    <p>{t(`المدفوع: ${paidAmount} ₪`, `Paid: ${paidAmount} ₪`)}</p>
+                    <p className="col-span-2 font-medium text-foreground">{t(`المتبقي: ${remainingAmount} ₪`, `Remaining: ${remainingAmount} ₪`)}</p>
+                  </div>
                 </div>
 
                 {/* Session log */}
@@ -266,7 +276,7 @@ export default function StudentProfile() {
                               <span className="text-muted-foreground ms-2">{s.start_time?.slice(0, 5)}</span>
                             </div>
                             <div className="flex items-center gap-2">
-                              {att?.is_present ? (
+                              {(att?.attended ?? att?.is_present) ? (
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-success/20 text-success">{t('حاضر', 'Present')}</span>
                               ) : att ? (
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-destructive/20 text-destructive">{t('غائب', 'Absent')}</span>
