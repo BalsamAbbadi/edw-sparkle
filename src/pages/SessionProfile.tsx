@@ -26,7 +26,7 @@ export default function SessionProfile() {
   const { data: session } = useQuery({
     queryKey: ['session', id],
     queryFn: async () => {
-      const { data, error } = await supabase.from('sessions').select('*, courses(title, fees)').eq('id', id!).maybeSingle();
+      const { data, error } = await supabase.from('sessions').select('*, courses(title, fees, payment_type, price_per_session, payment_interval_sessions)').eq('id', id!).maybeSingle();
       if (error) throw error;
       return data;
     },
@@ -64,25 +64,36 @@ export default function SessionProfile() {
 
   const toggleAttendanceMutation = useMutation({
     mutationFn: async ({ studentId, isPresent }: { studentId: string; isPresent: boolean }) => {
-      const { error } = await supabase.from('attendance').upsert({
-        session_id: id!, student_id: studentId, course_id: session!.course_id, user_id: user!.id, is_present: isPresent,
-      }, { onConflict: 'session_id,student_id' });
+      if (isPresent) {
+        const { error } = await supabase.from('attendance').upsert({
+          session_id: id!, student_id: studentId, course_id: session!.course_id, user_id: user!.id, attended: true, is_present: true,
+        }, { onConflict: 'session_id,student_id' });
+        if (error) throw error;
+        return;
+      }
+
+      const { error } = await supabase.from('attendance').delete().eq('session_id', id!).eq('student_id', studentId);
       if (error) throw error;
     },
     onSuccess: async (_data, variables) => {
       qc.setQueryData(['session-attendance', id], (prev: any[] | undefined) => {
         const current = Array.isArray(prev) ? prev : [];
-        const existing = current.find((item) => item.student_id === variables.studentId);
-        if (existing) {
-          return current.map((item) => item.student_id === variables.studentId ? { ...item, is_present: variables.isPresent } : item);
+        if (variables.isPresent) {
+          const existing = current.find((item) => item.student_id === variables.studentId);
+          if (existing) {
+            return current.map((item) => item.student_id === variables.studentId ? { ...item, attended: true, is_present: true } : item);
+          }
+          return [...current, {
+            session_id: id,
+            student_id: variables.studentId,
+            course_id: session?.course_id,
+            user_id: user?.id,
+            attended: true,
+            is_present: true,
+          }];
         }
-        return [...current, {
-          session_id: id,
-          student_id: variables.studentId,
-          course_id: session?.course_id,
-          user_id: user?.id,
-          is_present: variables.isPresent,
-        }];
+
+        return current.filter((item) => item.student_id !== variables.studentId);
       });
       qc.invalidateQueries({ queryKey: ['session-attendance', id] });
       qc.invalidateQueries({ queryKey: ['student-attendance'] });
@@ -102,7 +113,7 @@ export default function SessionProfile() {
   const markAllPresentMutation = useMutation({
     mutationFn: async () => {
       const rows = enrollments.map((enr: any) => ({
-        session_id: id!, student_id: enr.student_id, course_id: session!.course_id, user_id: user!.id, is_present: true,
+        session_id: id!, student_id: enr.student_id, course_id: session!.course_id, user_id: user!.id, attended: true, is_present: true,
       }));
       if (rows.length === 0) return;
       const { error } = await supabase.from('attendance').upsert(rows, { onConflict: 'session_id,student_id' });
@@ -157,7 +168,7 @@ export default function SessionProfile() {
 
   if (!session) return <div className="p-8 text-center text-muted-foreground">{t('جاري التحميل...', 'Loading...')}</div>;
 
-  const presentCount = attendanceRecords.filter((a: any) => a.is_present).length;
+  const presentCount = attendanceRecords.filter((a: any) => a.attended ?? a.is_present).length;
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -238,7 +249,7 @@ export default function SessionProfile() {
         <div className="space-y-2">
           {enrollments.map((enr: any) => {
             const att = attendanceRecords.find((a: any) => a.student_id === enr.student_id);
-            const isPresent = att?.is_present || false;
+            const isPresent = att?.attended ?? att?.is_present ?? false;
             return (
               <div key={enr.id} className="flex items-center justify-between bg-muted/30 backdrop-blur-sm rounded-xl px-4 py-3">
                 <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(`/students/${enr.student_id}`)}>
