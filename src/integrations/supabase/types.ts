@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       attendance: {
         Row: {
+          attended: boolean
           course_id: string
           created_at: string
           id: string
@@ -25,6 +26,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          attended?: boolean
           course_id: string
           created_at?: string
           id?: string
@@ -34,6 +36,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          attended?: boolean
           course_id?: string
           created_at?: string
           id?: string
@@ -488,6 +491,10 @@ export type Database = {
       recalculate_single_payment: {
         Args: { _course_id: string; _student_id: string }
         Returns: undefined
+      }
+      session_has_ended: {
+        Args: { _end_time: string; _session_date: string; _start_time: string }
+        Returns: boolean
       }
     }
     Enums: {

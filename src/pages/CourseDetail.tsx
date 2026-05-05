@@ -165,9 +165,6 @@ export default function CourseDetailPage() {
       }
       const { error: enrollError } = await supabase.from('enrollments').insert({ student_id: studentId, course_id: id!, user_id: user!.id });
       if (enrollError) throw enrollError;
-      await supabase.from('payments').insert({
-        student_id: studentId, course_id: id!, user_id: user!.id, amount_paid: 0, total_amount: course?.fees || 0,
-      });
       return studentForm.name;
     },
     onSuccess: (name) => {
