@@ -393,7 +393,7 @@ export default function IncomePage() {
               </div>
               <p className="text-3xl font-bold text-foreground mb-2">{detailModal.value} {t('طالب', 'students')}</p>
               <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                {payments.filter((p: any) => {
+                {activePayments.filter((p: any) => {
                   if (detailModal.name.includes(t('مدفوع', 'Paid')) && !detailModal.name.includes(t('غير', 'Un'))) return p.status === 'full';
                   if (detailModal.name.includes(t('جزئي', 'Partial'))) return p.status === 'partial';
                   return p.status === 'unpaid';
