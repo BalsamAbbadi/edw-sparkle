@@ -270,9 +270,14 @@ export default function CoursesPage() {
   };
 
   const filteredCourses = courses.filter((c: any) => {
-    if (courseTab === 'archived') return (c as any).is_archived;
-    if (courseTab === 'short') return (c as any).course_type === 'short' && !(c as any).is_archived;
-    return ((c as any).course_type || 'long') === 'long' && !(c as any).is_archived;
+    if (courseTab === 'archived' && !(c as any).is_archived) return false;
+    if (courseTab === 'short' && (((c as any).course_type !== 'short') || (c as any).is_archived)) return false;
+    if (courseTab === 'long' && ((((c as any).course_type || 'long') !== 'long') || (c as any).is_archived)) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      if (!(c.title || '').toLowerCase().includes(q) && !(c.description || '').toLowerCase().includes(q)) return false;
+    }
+    return true;
   });
 
   return (
