@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Plus, Edit2, Trash2, X, Clock, Users, Copy, Calendar as CalIcon, Archive } from 'lucide-react';
+import { BookOpen, Plus, Edit2, Trash2, X, Clock, Users, Copy, Calendar as CalIcon, Archive, ArchiveRestore, Search } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
