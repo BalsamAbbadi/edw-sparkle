@@ -66,7 +66,7 @@ export default function IncomePage() {
   const monthlyData = Array.from({ length: 12 }, (_, i) => {
     const date = subMonths(new Date(), 11 - i);
     const ms = startOfMonth(date), me = endOfMonth(date);
-    const mp = payments.filter((p: any) => { const d = new Date(p.created_at); return d >= ms && d <= me; });
+    const mp = activePayments.filter((p: any) => { const d = new Date(p.created_at); return d >= ms && d <= me; });
     return {
       month: format(date, 'MMM', { locale: lang === 'ar' ? ar : undefined }),
       collected: mp.reduce((s: number, p: any) => s + Number(p.amount_paid), 0),
