@@ -79,6 +79,7 @@ export default function CoursesPage() {
   const [dupStartDate, setDupStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [courseTab, setCourseTab] = useState<'long' | 'short' | 'archived'>('long');
   const [searchQuery, setSearchQuery] = useState('');
+  const [conflictWarning, setConflictWarning] = useState<{ items: any[]; pendingForm: CourseForm } | null>(null);
 
   const { data: courses = [], isLoading } = useQuery({
     queryKey: ['courses'],
