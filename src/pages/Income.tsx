@@ -60,14 +60,8 @@ export default function IncomePage() {
     enabled: !!user,
   });
 
-  // Filter out archived courses older than 7 days from active stats
-  const isRecentlyArchived = (p: any) => {
-    if (!p.courses?.is_archived) return true;
-    if (!p.courses?.archived_at) return false;
-    return differenceInDays(new Date(), new Date(p.courses.archived_at)) <= 7;
-  };
-
-  const activePayments = payments.filter(isRecentlyArchived);
+  // Exclude ALL archived courses from active stats
+  const activePayments = payments.filter((p: any) => !p.courses?.is_archived);
 
   const monthlyData = Array.from({ length: 12 }, (_, i) => {
     const date = subMonths(new Date(), 11 - i);
