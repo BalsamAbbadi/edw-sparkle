@@ -120,27 +120,55 @@ export default function CoursesPage() {
     enabled: !!user,
   });
 
-  const createSessions = async (courseId: string, courseTitle: string, schedule: any[], totalSessions: number, startDateStr: string, color: string) => {
-    if (schedule.length === 0) return;
+  const buildPlannedSessions = (schedule: any[], totalSessions: number, startDateStr: string) => {
+    if (!schedule || schedule.length === 0) return [];
     const startDate = new Date(startDateStr);
     const sessions: any[] = [];
-    let sessionCount = 0;
+    let count = 0;
     const totalWeeks = Math.ceil(totalSessions / schedule.length);
-    for (let week = 0; week < totalWeeks && sessionCount < totalSessions; week++) {
+    for (let week = 0; week < totalWeeks && count < totalSessions; week++) {
       for (const slot of schedule) {
-        if (sessionCount >= totalSessions) break;
+        if (count >= totalSessions) break;
         const currentDay = startDate.getDay();
         const diff = (slot.day - currentDay + 7) % 7;
         const sessionDate = addWeeks(addDays(startDate, diff), week);
         if (sessionDate < startDate && week === 0) continue;
-        sessions.push({
-          course_id: courseId, user_id: user!.id, title: courseTitle,
-          session_date: format(sessionDate, 'yyyy-MM-dd'), start_time: slot.startTime, end_time: slot.endTime || null, color,
-        });
-        sessionCount++;
+        sessions.push({ session_date: format(sessionDate, 'yyyy-MM-dd'), start_time: slot.startTime, end_time: slot.endTime || null });
+        count++;
       }
     }
-    if (sessions.length > 0) await supabase.from('sessions').insert(sessions);
+    return sessions;
+  };
+
+  const findConflicts = async (planned: { session_date: string; start_time: string; end_time: string | null }[]) => {
+    if (planned.length === 0) return [];
+    const dates = Array.from(new Set(planned.map(p => p.session_date)));
+    const { data: existing } = await supabase
+      .from('sessions')
+      .select('id, session_date, start_time, end_time, title, course_id, courses(title)')
+      .in('session_date', dates);
+    const conflicts: any[] = [];
+    (existing || []).forEach((ex: any) => {
+      planned.forEach(p => {
+        if (p.session_date !== ex.session_date) return;
+        const exEnd = ex.end_time || ex.start_time;
+        const pEnd = p.end_time || p.start_time;
+        if (p.start_time < exEnd && pEnd > ex.start_time) {
+          conflicts.push({ existing: ex, planned: p });
+        }
+      });
+    });
+    return conflicts;
+  };
+
+  const createSessions = async (courseId: string, courseTitle: string, schedule: any[], totalSessions: number, startDateStr: string, color: string) => {
+    const planned = buildPlannedSessions(schedule, totalSessions, startDateStr);
+    if (planned.length === 0) return;
+    const rows = planned.map(p => ({
+      course_id: courseId, user_id: user!.id, title: courseTitle,
+      session_date: p.session_date, start_time: p.start_time, end_time: p.end_time, color,
+    }));
+    await supabase.from('sessions').insert(rows);
   };
 
   const saveMutation = useMutation({
