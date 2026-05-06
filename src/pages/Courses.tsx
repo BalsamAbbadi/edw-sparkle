@@ -466,6 +466,38 @@ export default function CoursesPage() {
         )}
       </AnimatePresence>
 
+      {/* Conflict Warning Modal */}
+      <AnimatePresence>
+        {conflictWarning && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/30 backdrop-blur-sm p-4">
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-lg bg-card rounded-2xl shadow-xl border border-border p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-warning/15 flex items-center justify-center shrink-0"><CalIcon className="w-5 h-5 text-warning" /></div>
+                <div>
+                  <h3 className="font-bold text-foreground">{t('تعارض في المواعيد', 'Schedule Conflict')}</h3>
+                  <p className="text-xs text-muted-foreground">{t('الحصص التالية تتعارض مع حصص موجودة:', 'The following sessions conflict with existing ones:')}</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {conflictWarning.items.slice(0, 12).map((c, i) => (
+                  <div key={i} className="rounded-lg bg-warning/5 border border-warning/30 p-3 text-sm">
+                    <div className="font-medium text-foreground">📅 {c.planned.session_date} • {c.planned.start_time}{c.planned.end_time ? `-${c.planned.end_time}` : ''}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {t('يتعارض مع:', 'Conflicts with:')} <b>{c.existing.title}</b> ({c.existing.courses?.title || '-'}) — {c.existing.start_time}{c.existing.end_time ? `-${c.existing.end_time}` : ''}
+                    </div>
+                  </div>
+                ))}
+                {conflictWarning.items.length > 12 && <p className="text-xs text-muted-foreground">+ {conflictWarning.items.length - 12} {t('تعارض إضافي', 'more conflicts')}</p>}
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setConflictWarning(null)} className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground font-medium">{t('تعديل المواعيد', 'Edit Schedule')}</button>
+                <button onClick={() => { const f = conflictWarning.pendingForm; setConflictWarning(null); saveMutation.mutate(f); }} className="flex-1 py-2 rounded-lg bg-muted text-foreground font-medium">{t('إنشاء على أي حال', 'Create Anyway')}</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Courses Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{[1, 2, 3].map(i => <div key={i} className="glass-card rounded-xl p-6 animate-pulse h-48" />)}</div>
