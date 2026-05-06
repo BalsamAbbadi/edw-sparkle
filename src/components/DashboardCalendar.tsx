@@ -27,6 +27,7 @@ export function DashboardCalendar() {
   const [draggedSession, setDraggedSession] = useState<any>(null);
   const [noteSession, setNoteSession] = useState<any>(null);
   const [noteText, setNoteText] = useState('');
+  const [extendedHours, setExtendedHours] = useState(false);
 
   const locale = lang === 'ar' ? ar : undefined;
   const isRTL = lang === 'ar';
