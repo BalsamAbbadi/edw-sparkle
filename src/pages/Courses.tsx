@@ -458,6 +458,14 @@ export default function CoursesPage() {
                           toast.success(t('تم أرشفة الدورة', 'Course archived'));
                         }} className="p-1.5 rounded-lg hover:bg-muted"><Archive className="w-4 h-4 text-muted-foreground" /></button>
                       )}
+                      {course.is_archived && (
+                        <button onClick={async () => {
+                          await supabase.from('courses').update({ is_archived: false, archived_at: null } as any).eq('id', course.id);
+                          qc.invalidateQueries({ queryKey: ['courses'] });
+                          notify('course', t(`تمت إزالة أرشفة الدورة: ${course.title}`, `Course unarchived: ${course.title}`));
+                          toast.success(t('تمت إزالة الأرشفة', 'Course unarchived'));
+                        }} className="p-1.5 rounded-lg hover:bg-muted"><ArchiveRestore className="w-4 h-4 text-success" /></button>
+                      )}
                       <button onClick={() => {
                         const msg = t('سيتم حذف الدورة وجميع الطلاب والدفعات المرتبطة بها. هل أنت متأكد؟', 'This will delete the course and all related students, payments, sessions. Are you sure?');
                         if (window.confirm(msg)) deleteMutation.mutate(course.id);
