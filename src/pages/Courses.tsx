@@ -78,6 +78,7 @@ export default function CoursesPage() {
   const [showDuplicate, setShowDuplicate] = useState<any>(null);
   const [dupStartDate, setDupStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [courseTab, setCourseTab] = useState<'long' | 'short' | 'archived'>('long');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const { data: courses = [], isLoading } = useQuery({
     queryKey: ['courses'],
