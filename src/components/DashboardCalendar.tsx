@@ -222,11 +222,11 @@ export function DashboardCalendar() {
               <div className="space-y-0">
                 {hours.map(hour => (
                   <div key={hour} className="grid grid-cols-8 gap-1">
-                    <div className="text-xs text-muted-foreground py-3 text-center">{`${hour}:00`}</div>
+                    <div className="text-[11px] text-muted-foreground py-1.5 text-center">{`${hour}:00`}</div>
                     {weekDays.map(day => {
                       const cellSessions = getSessionsForDateHour(day, hour);
                       return (
-                        <div key={`${day.toISOString()}-${hour}`} className="border border-border/20 rounded-md min-h-[44px] p-1 hover:bg-muted/30 transition-colors" onDragOver={handleDragOver} onDrop={e => handleDrop(e, day, hour)}>
+                        <div key={`${day.toISOString()}-${hour}`} className="border border-border/20 rounded-md min-h-[34px] p-0.5 hover:bg-muted/30 transition-colors" onDragOver={handleDragOver} onDrop={e => handleDrop(e, day, hour)}>
                           {cellSessions.map((session: any) => <SessionBlock key={session.id} session={session} compact />)}
                         </div>
                       );
