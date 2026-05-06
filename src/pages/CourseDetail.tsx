@@ -488,7 +488,7 @@ export default function CourseDetailPage() {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/courses')} className="p-2 rounded-lg hover:bg-muted transition-colors">
+        <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-muted transition-colors">
           <ArrowRight className="w-5 h-5 text-muted-foreground rtl:rotate-0 ltr:rotate-180" />
         </button>
         <BookOpen className="w-6 h-6 text-primary" />
