@@ -242,8 +242,8 @@ export function DashboardCalendar() {
               const cellSessions = getSessionsForDateHour(currentDate, hour);
               return (
                 <div key={hour} className="flex gap-3" onDragOver={handleDragOver} onDrop={e => handleDrop(e, currentDate, hour)}>
-                  <div className="w-16 text-sm text-muted-foreground py-3 text-center shrink-0">{`${hour}:00`}</div>
-                  <div className="flex-1 border-t border-border/30 min-h-[56px] py-2 hover:bg-muted/20 rounded-lg transition-colors px-2">
+                  <div className="w-16 text-xs text-muted-foreground py-2 text-center shrink-0">{`${hour}:00`}</div>
+                  <div className="flex-1 border-t border-border/30 min-h-[42px] py-1.5 hover:bg-muted/20 rounded-lg transition-colors px-2">
                     {cellSessions.map((session: any) => <SessionBlock key={session.id} session={session} />)}
                   </div>
                 </div>
