@@ -80,7 +80,9 @@ export function DashboardCalendar() {
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
-  const hours = Array.from({ length: 14 }, (_, i) => i + 7);
+  const hours = extendedHours
+    ? Array.from({ length: 17 }, (_, i) => i + 7)  // 7 AM to 11 PM
+    : Array.from({ length: 12 }, (_, i) => i + 7); // 7 AM to 6 PM (more compact)
 
   const views: { key: ViewMode; label: string }[] = [
     { key: 'day', label: t('يوم', 'Day') },
