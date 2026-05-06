@@ -354,7 +354,15 @@ export default function CoursesPage() {
                 <h2 className="text-lg font-bold">{editingId ? t('تعديل الدورة', 'Edit Course') : t('دورة جديدة', 'New Course')}</h2>
                 <button onClick={resetForm}><X className="w-5 h-5" /></button>
               </div>
-              <form onSubmit={e => { e.preventDefault(); saveMutation.mutate(form); }} className="p-4 space-y-4">
+              <form onSubmit={async e => {
+                e.preventDefault();
+                if (!editingId) {
+                  const planned = buildPlannedSessions(form.recurring_schedule, form.totalSessions, form.startDate);
+                  const conflicts = await findConflicts(planned);
+                  if (conflicts.length > 0) { setConflictWarning({ items: conflicts, pendingForm: form }); return; }
+                }
+                saveMutation.mutate(form);
+              }} className="p-4 space-y-4">
                 {/* Course Type */}
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1 block">{t('نوع الدورة', 'Course Type')}</label>
