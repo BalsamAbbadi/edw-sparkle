@@ -305,6 +305,17 @@ export default function CoursesPage() {
         ))}
       </div>
 
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute top-1/2 -translate-y-1/2 start-3 w-4 h-4 text-muted-foreground" />
+        <input
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder={t('بحث في الدورات...', 'Search courses...')}
+          className="w-full ps-10 pe-3 py-2 rounded-lg border border-input bg-background/50 text-foreground text-sm focus:ring-2 focus:ring-ring outline-none"
+        />
+      </div>
+
       {/* Form Modal */}
       <AnimatePresence>
         {showForm && (
