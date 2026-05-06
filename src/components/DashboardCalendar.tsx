@@ -162,6 +162,11 @@ export function DashboardCalendar() {
             <button onClick={() => navigateCalendar('prev')} className="p-2 rounded-lg hover:bg-muted transition-colors"><PrevIcon className="w-4 h-4" /></button>
             <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-sm rounded-lg hover:bg-muted transition-colors text-primary font-medium">{t('اليوم', 'Today')}</button>
             <button onClick={() => navigateCalendar('next')} className="p-2 rounded-lg hover:bg-muted transition-colors"><NextIcon className="w-4 h-4" /></button>
+            {viewMode !== 'month' && (
+              <button onClick={() => setExtendedHours(v => !v)} title={t('تمديد إلى ساعات المساء', 'Toggle evening hours')} className={`px-2 py-1.5 text-xs rounded-lg transition-colors ${extendedHours ? 'bg-primary/15 text-primary' : 'hover:bg-muted text-muted-foreground'}`}>
+                {extendedHours ? t('🌙 مساء', '🌙 Evening') : t('🌅 ممتد', '🌅 Extend')}
+              </button>
+            )}
           </div>
         </div>
       </div>
