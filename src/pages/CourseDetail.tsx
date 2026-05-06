@@ -488,7 +488,7 @@ export default function CourseDetailPage() {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/courses')} className="p-2 rounded-lg hover:bg-muted transition-colors">
+        <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-muted transition-colors">
           <ArrowRight className="w-5 h-5 text-muted-foreground rtl:rotate-0 ltr:rotate-180" />
         </button>
         <BookOpen className="w-6 h-6 text-primary" />
@@ -503,6 +503,18 @@ export default function CourseDetailPage() {
             {paymentInterval > 0 && <span className="text-xs">({t(`كل ${paymentInterval} حصص`, `Every ${paymentInterval} sessions`)})</span>}
           </div>
         </div>
+        <button
+          onClick={async () => {
+            const willArchive = !(course as any).is_archived;
+            await supabase.from('courses').update({ is_archived: willArchive, archived_at: willArchive ? new Date().toISOString() : null } as any).eq('id', id!);
+            qc.invalidateQueries({ queryKey: ['course', id] });
+            qc.invalidateQueries({ queryKey: ['courses'] });
+            toast.success(willArchive ? t('تم أرشفة الدورة', 'Course archived') : t('تمت إزالة الأرشفة', 'Unarchived'));
+          }}
+          className="px-3 py-2 rounded-lg bg-muted hover:bg-muted/70 text-sm font-medium flex items-center gap-2"
+        >
+          {(course as any).is_archived ? '↩️' : '🗄️'} {(course as any).is_archived ? t('إزالة الأرشفة', 'Unarchive') : t('أرشفة', 'Archive')}
+        </button>
       </div>
 
       <div className="flex gap-2 bg-muted/50 backdrop-blur-sm rounded-lg p-1 overflow-x-auto">

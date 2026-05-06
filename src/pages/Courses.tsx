@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Plus, Edit2, Trash2, X, Clock, Users, Copy, Calendar as CalIcon, Archive } from 'lucide-react';
+import { BookOpen, Plus, Edit2, Trash2, X, Clock, Users, Copy, Calendar as CalIcon, Archive, ArchiveRestore, Search } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -78,6 +78,8 @@ export default function CoursesPage() {
   const [showDuplicate, setShowDuplicate] = useState<any>(null);
   const [dupStartDate, setDupStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [courseTab, setCourseTab] = useState<'long' | 'short' | 'archived'>('long');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [conflictWarning, setConflictWarning] = useState<{ items: any[]; pendingForm: CourseForm } | null>(null);
 
   const { data: courses = [], isLoading } = useQuery({
     queryKey: ['courses'],
@@ -118,27 +120,55 @@ export default function CoursesPage() {
     enabled: !!user,
   });
 
-  const createSessions = async (courseId: string, courseTitle: string, schedule: any[], totalSessions: number, startDateStr: string, color: string) => {
-    if (schedule.length === 0) return;
+  const buildPlannedSessions = (schedule: any[], totalSessions: number, startDateStr: string) => {
+    if (!schedule || schedule.length === 0) return [];
     const startDate = new Date(startDateStr);
     const sessions: any[] = [];
-    let sessionCount = 0;
+    let count = 0;
     const totalWeeks = Math.ceil(totalSessions / schedule.length);
-    for (let week = 0; week < totalWeeks && sessionCount < totalSessions; week++) {
+    for (let week = 0; week < totalWeeks && count < totalSessions; week++) {
       for (const slot of schedule) {
-        if (sessionCount >= totalSessions) break;
+        if (count >= totalSessions) break;
         const currentDay = startDate.getDay();
         const diff = (slot.day - currentDay + 7) % 7;
         const sessionDate = addWeeks(addDays(startDate, diff), week);
         if (sessionDate < startDate && week === 0) continue;
-        sessions.push({
-          course_id: courseId, user_id: user!.id, title: courseTitle,
-          session_date: format(sessionDate, 'yyyy-MM-dd'), start_time: slot.startTime, end_time: slot.endTime || null, color,
-        });
-        sessionCount++;
+        sessions.push({ session_date: format(sessionDate, 'yyyy-MM-dd'), start_time: slot.startTime, end_time: slot.endTime || null });
+        count++;
       }
     }
-    if (sessions.length > 0) await supabase.from('sessions').insert(sessions);
+    return sessions;
+  };
+
+  const findConflicts = async (planned: { session_date: string; start_time: string; end_time: string | null }[]) => {
+    if (planned.length === 0) return [];
+    const dates = Array.from(new Set(planned.map(p => p.session_date)));
+    const { data: existing } = await supabase
+      .from('sessions')
+      .select('id, session_date, start_time, end_time, title, course_id, courses(title)')
+      .in('session_date', dates);
+    const conflicts: any[] = [];
+    (existing || []).forEach((ex: any) => {
+      planned.forEach(p => {
+        if (p.session_date !== ex.session_date) return;
+        const exEnd = ex.end_time || ex.start_time;
+        const pEnd = p.end_time || p.start_time;
+        if (p.start_time < exEnd && pEnd > ex.start_time) {
+          conflicts.push({ existing: ex, planned: p });
+        }
+      });
+    });
+    return conflicts;
+  };
+
+  const createSessions = async (courseId: string, courseTitle: string, schedule: any[], totalSessions: number, startDateStr: string, color: string) => {
+    const planned = buildPlannedSessions(schedule, totalSessions, startDateStr);
+    if (planned.length === 0) return;
+    const rows = planned.map(p => ({
+      course_id: courseId, user_id: user!.id, title: courseTitle,
+      session_date: p.session_date, start_time: p.start_time, end_time: p.end_time, color,
+    }));
+    await supabase.from('sessions').insert(rows);
   };
 
   const saveMutation = useMutation({
@@ -269,9 +299,14 @@ export default function CoursesPage() {
   };
 
   const filteredCourses = courses.filter((c: any) => {
-    if (courseTab === 'archived') return (c as any).is_archived;
-    if (courseTab === 'short') return (c as any).course_type === 'short' && !(c as any).is_archived;
-    return ((c as any).course_type || 'long') === 'long' && !(c as any).is_archived;
+    if (courseTab === 'archived' && !(c as any).is_archived) return false;
+    if (courseTab === 'short' && (((c as any).course_type !== 'short') || (c as any).is_archived)) return false;
+    if (courseTab === 'long' && ((((c as any).course_type || 'long') !== 'long') || (c as any).is_archived)) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      if (!(c.title || '').toLowerCase().includes(q) && !(c.description || '').toLowerCase().includes(q)) return false;
+    }
+    return true;
   });
 
   return (
@@ -299,6 +334,17 @@ export default function CoursesPage() {
         ))}
       </div>
 
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute top-1/2 -translate-y-1/2 start-3 w-4 h-4 text-muted-foreground" />
+        <input
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder={t('بحث في الدورات...', 'Search courses...')}
+          className="w-full ps-10 pe-3 py-2 rounded-lg border border-input bg-background/50 text-foreground text-sm focus:ring-2 focus:ring-ring outline-none"
+        />
+      </div>
+
       {/* Form Modal */}
       <AnimatePresence>
         {showForm && (
@@ -308,7 +354,15 @@ export default function CoursesPage() {
                 <h2 className="text-lg font-bold">{editingId ? t('تعديل الدورة', 'Edit Course') : t('دورة جديدة', 'New Course')}</h2>
                 <button onClick={resetForm}><X className="w-5 h-5" /></button>
               </div>
-              <form onSubmit={e => { e.preventDefault(); saveMutation.mutate(form); }} className="p-4 space-y-4">
+              <form onSubmit={async e => {
+                e.preventDefault();
+                if (!editingId) {
+                  const planned = buildPlannedSessions(form.recurring_schedule, form.totalSessions, form.startDate);
+                  const conflicts = await findConflicts(planned);
+                  if (conflicts.length > 0) { setConflictWarning({ items: conflicts, pendingForm: form }); return; }
+                }
+                saveMutation.mutate(form);
+              }} className="p-4 space-y-4">
                 {/* Course Type */}
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1 block">{t('نوع الدورة', 'Course Type')}</label>
@@ -412,6 +466,38 @@ export default function CoursesPage() {
         )}
       </AnimatePresence>
 
+      {/* Conflict Warning Modal */}
+      <AnimatePresence>
+        {conflictWarning && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/30 backdrop-blur-sm p-4">
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="w-full max-w-lg bg-card rounded-2xl shadow-xl border border-border p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-warning/15 flex items-center justify-center shrink-0"><CalIcon className="w-5 h-5 text-warning" /></div>
+                <div>
+                  <h3 className="font-bold text-foreground">{t('تعارض في المواعيد', 'Schedule Conflict')}</h3>
+                  <p className="text-xs text-muted-foreground">{t('الحصص التالية تتعارض مع حصص موجودة:', 'The following sessions conflict with existing ones:')}</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {conflictWarning.items.slice(0, 12).map((c, i) => (
+                  <div key={i} className="rounded-lg bg-warning/5 border border-warning/30 p-3 text-sm">
+                    <div className="font-medium text-foreground">📅 {c.planned.session_date} • {c.planned.start_time}{c.planned.end_time ? `-${c.planned.end_time}` : ''}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {t('يتعارض مع:', 'Conflicts with:')} <b>{c.existing.title}</b> ({c.existing.courses?.title || '-'}) — {c.existing.start_time}{c.existing.end_time ? `-${c.existing.end_time}` : ''}
+                    </div>
+                  </div>
+                ))}
+                {conflictWarning.items.length > 12 && <p className="text-xs text-muted-foreground">+ {conflictWarning.items.length - 12} {t('تعارض إضافي', 'more conflicts')}</p>}
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setConflictWarning(null)} className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground font-medium">{t('تعديل المواعيد', 'Edit Schedule')}</button>
+                <button onClick={() => { const f = conflictWarning.pendingForm; setConflictWarning(null); saveMutation.mutate(f); }} className="flex-1 py-2 rounded-lg bg-muted text-foreground font-medium">{t('إنشاء على أي حال', 'Create Anyway')}</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Courses Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{[1, 2, 3].map(i => <div key={i} className="glass-card rounded-xl p-6 animate-pulse h-48" />)}</div>
@@ -440,6 +526,14 @@ export default function CoursesPage() {
                           notify('course', t(`تم أرشفة الدورة: ${course.title}`, `Course archived: ${course.title}`));
                           toast.success(t('تم أرشفة الدورة', 'Course archived'));
                         }} className="p-1.5 rounded-lg hover:bg-muted"><Archive className="w-4 h-4 text-muted-foreground" /></button>
+                      )}
+                      {course.is_archived && (
+                        <button onClick={async () => {
+                          await supabase.from('courses').update({ is_archived: false, archived_at: null } as any).eq('id', course.id);
+                          qc.invalidateQueries({ queryKey: ['courses'] });
+                          notify('course', t(`تمت إزالة أرشفة الدورة: ${course.title}`, `Course unarchived: ${course.title}`));
+                          toast.success(t('تمت إزالة الأرشفة', 'Course unarchived'));
+                        }} className="p-1.5 rounded-lg hover:bg-muted"><ArchiveRestore className="w-4 h-4 text-success" /></button>
                       )}
                       <button onClick={() => {
                         const msg = t('سيتم حذف الدورة وجميع الطلاب والدفعات المرتبطة بها. هل أنت متأكد؟', 'This will delete the course and all related students, payments, sessions. Are you sure?');

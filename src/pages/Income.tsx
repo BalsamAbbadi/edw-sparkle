@@ -60,19 +60,13 @@ export default function IncomePage() {
     enabled: !!user,
   });
 
-  // Filter out archived courses older than 7 days from active stats
-  const isRecentlyArchived = (p: any) => {
-    if (!p.courses?.is_archived) return true;
-    if (!p.courses?.archived_at) return false;
-    return differenceInDays(new Date(), new Date(p.courses.archived_at)) <= 7;
-  };
-
-  const activePayments = payments.filter(isRecentlyArchived);
+  // Exclude ALL archived courses from active stats
+  const activePayments = payments.filter((p: any) => !p.courses?.is_archived);
 
   const monthlyData = Array.from({ length: 12 }, (_, i) => {
     const date = subMonths(new Date(), 11 - i);
     const ms = startOfMonth(date), me = endOfMonth(date);
-    const mp = payments.filter((p: any) => { const d = new Date(p.created_at); return d >= ms && d <= me; });
+    const mp = activePayments.filter((p: any) => { const d = new Date(p.created_at); return d >= ms && d <= me; });
     return {
       month: format(date, 'MMM', { locale: lang === 'ar' ? ar : undefined }),
       collected: mp.reduce((s: number, p: any) => s + Number(p.amount_paid), 0),
@@ -134,7 +128,7 @@ export default function IncomePage() {
     outstanding: { label: t('المتبقي', 'Outstanding'), color: 'hsl(var(--destructive))' },
   };
 
-  const timelinePayments = [...payments].filter((p: any) => p.amount_paid > 0).sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()).slice(0, 20);
+  const timelinePayments = [...activePayments].filter((p: any) => p.amount_paid > 0).sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()).slice(0, 20);
 
   // Course-level bar chart data
   const courseBarData = courseList.slice(0, 10).map(c => ({
@@ -399,7 +393,7 @@ export default function IncomePage() {
               </div>
               <p className="text-3xl font-bold text-foreground mb-2">{detailModal.value} {t('طالب', 'students')}</p>
               <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                {payments.filter((p: any) => {
+                {activePayments.filter((p: any) => {
                   if (detailModal.name.includes(t('مدفوع', 'Paid')) && !detailModal.name.includes(t('غير', 'Un'))) return p.status === 'full';
                   if (detailModal.name.includes(t('جزئي', 'Partial'))) return p.status === 'partial';
                   return p.status === 'unpaid';

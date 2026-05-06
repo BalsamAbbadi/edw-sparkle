@@ -27,6 +27,7 @@ export function DashboardCalendar() {
   const [draggedSession, setDraggedSession] = useState<any>(null);
   const [noteSession, setNoteSession] = useState<any>(null);
   const [noteText, setNoteText] = useState('');
+  const [extendedHours, setExtendedHours] = useState(false);
 
   const locale = lang === 'ar' ? ar : undefined;
   const isRTL = lang === 'ar';
@@ -79,7 +80,9 @@ export function DashboardCalendar() {
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
-  const hours = Array.from({ length: 14 }, (_, i) => i + 7);
+  const hours = extendedHours
+    ? Array.from({ length: 17 }, (_, i) => i + 7)  // 7 AM to 11 PM
+    : Array.from({ length: 12 }, (_, i) => i + 7); // 7 AM to 6 PM (more compact)
 
   const views: { key: ViewMode; label: string }[] = [
     { key: 'day', label: t('يوم', 'Day') },
@@ -159,6 +162,11 @@ export function DashboardCalendar() {
             <button onClick={() => navigateCalendar('prev')} className="p-2 rounded-lg hover:bg-muted transition-colors"><PrevIcon className="w-4 h-4" /></button>
             <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-sm rounded-lg hover:bg-muted transition-colors text-primary font-medium">{t('اليوم', 'Today')}</button>
             <button onClick={() => navigateCalendar('next')} className="p-2 rounded-lg hover:bg-muted transition-colors"><NextIcon className="w-4 h-4" /></button>
+            {viewMode !== 'month' && (
+              <button onClick={() => setExtendedHours(v => !v)} title={t('تمديد إلى ساعات المساء', 'Toggle evening hours')} className={`px-2 py-1.5 text-xs rounded-lg transition-colors ${extendedHours ? 'bg-primary/15 text-primary' : 'hover:bg-muted text-muted-foreground'}`}>
+                {extendedHours ? t('🌙 مساء', '🌙 Evening') : t('🌅 ممتد', '🌅 Extend')}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -214,11 +222,11 @@ export function DashboardCalendar() {
               <div className="space-y-0">
                 {hours.map(hour => (
                   <div key={hour} className="grid grid-cols-8 gap-1">
-                    <div className="text-xs text-muted-foreground py-3 text-center">{`${hour}:00`}</div>
+                    <div className="text-[11px] text-muted-foreground py-1.5 text-center">{`${hour}:00`}</div>
                     {weekDays.map(day => {
                       const cellSessions = getSessionsForDateHour(day, hour);
                       return (
-                        <div key={`${day.toISOString()}-${hour}`} className="border border-border/20 rounded-md min-h-[44px] p-1 hover:bg-muted/30 transition-colors" onDragOver={handleDragOver} onDrop={e => handleDrop(e, day, hour)}>
+                        <div key={`${day.toISOString()}-${hour}`} className="border border-border/20 rounded-md min-h-[34px] p-0.5 hover:bg-muted/30 transition-colors" onDragOver={handleDragOver} onDrop={e => handleDrop(e, day, hour)}>
                           {cellSessions.map((session: any) => <SessionBlock key={session.id} session={session} compact />)}
                         </div>
                       );
@@ -234,8 +242,8 @@ export function DashboardCalendar() {
               const cellSessions = getSessionsForDateHour(currentDate, hour);
               return (
                 <div key={hour} className="flex gap-3" onDragOver={handleDragOver} onDrop={e => handleDrop(e, currentDate, hour)}>
-                  <div className="w-16 text-sm text-muted-foreground py-3 text-center shrink-0">{`${hour}:00`}</div>
-                  <div className="flex-1 border-t border-border/30 min-h-[56px] py-2 hover:bg-muted/20 rounded-lg transition-colors px-2">
+                  <div className="w-16 text-xs text-muted-foreground py-2 text-center shrink-0">{`${hour}:00`}</div>
+                  <div className="flex-1 border-t border-border/30 min-h-[42px] py-1.5 hover:bg-muted/20 rounded-lg transition-colors px-2">
                     {cellSessions.map((session: any) => <SessionBlock key={session.id} session={session} />)}
                   </div>
                 </div>
