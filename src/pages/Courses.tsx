@@ -175,18 +175,20 @@ export default function CoursesPage() {
     mutationFn: async (formData: CourseForm) => {
       const fees = formData.fees === '' ? 0 : Number(formData.fees);
       const pricePerSession = formData.price_per_session === '' ? 0 : Number(formData.price_per_session);
+      const normalizedFees = formData.payment_type === 'full' ? fees : 0;
+      const normalizedPricePerSession = formData.payment_type === 'per_session' ? pricePerSession : 0;
       if (editingId) {
         const { error } = await supabase.from('courses').update({
-          title: formData.title, description: formData.description, duration: formData.duration, fees, recurring_schedule: formData.recurring_schedule as any,
+          title: formData.title, description: formData.description, duration: formData.duration, fees: normalizedFees, recurring_schedule: formData.recurring_schedule as any,
           course_type: formData.course_type, payment_interval_sessions: formData.payment_interval_sessions,
-          payment_type: formData.payment_type, price_per_session: pricePerSession,
+          payment_type: formData.payment_type, price_per_session: normalizedPricePerSession,
         } as any).eq('id', editingId);
         if (error) throw error;
       } else {
         const { data: course, error } = await supabase.from('courses').insert({
-          user_id: user!.id, title: formData.title, description: formData.description, duration: formData.duration, fees, recurring_schedule: formData.recurring_schedule as any,
+          user_id: user!.id, title: formData.title, description: formData.description, duration: formData.duration, fees: normalizedFees, recurring_schedule: formData.recurring_schedule as any,
           course_type: formData.course_type, payment_interval_sessions: formData.payment_interval_sessions, start_date: formData.startDate,
-          payment_type: formData.payment_type, price_per_session: pricePerSession,
+          payment_type: formData.payment_type, price_per_session: normalizedPricePerSession,
         } as any).select().single();
         if (error) throw error;
         await createSessions(course.id, formData.title, formData.recurring_schedule, formData.totalSessions, formData.startDate, formData.sessionColor);
@@ -206,6 +208,11 @@ export default function CoursesPage() {
       const { data: newCourse, error } = await supabase.from('courses').insert({
         user_id: user!.id, title: `${course.title} (${t('نسخة', 'Copy')})`,
         description: course.description, duration: course.duration, fees: course.fees,
+        payment_type: course.payment_type || 'full',
+        price_per_session: course.price_per_session || 0,
+        payment_interval_sessions: course.payment_interval_sessions || 0,
+        course_type: course.course_type || 'long',
+        start_date: startDate,
         recurring_schedule: course.recurring_schedule,
       }).select().single();
       if (error) throw error;
@@ -262,9 +269,9 @@ export default function CoursesPage() {
     setEditingId(course.id);
     setForm({
       title: course.title, description: course.description || '', duration: course.duration || '',
-      fees: course.fees || '', totalSessions: 16, startDate: format(new Date(), 'yyyy-MM-dd'),
+      fees: course.payment_type === 'full' ? (course.fees || '') : '', totalSessions: 16, startDate: format(new Date(), 'yyyy-MM-dd'),
       payment_type: (course as any).payment_type || 'full',
-      price_per_session: (course as any).price_per_session || '',
+      price_per_session: (course as any).payment_type === 'per_session' ? ((course as any).price_per_session || '') : '',
       sessionColor: SESSION_COLORS[0],
       course_type: (course as any).course_type || 'long',
       payment_interval_sessions: (course as any).payment_interval_sessions || 0,
@@ -385,10 +392,33 @@ export default function CoursesPage() {
                     <input value={form.duration} onChange={e => setForm(f => ({ ...f, duration: e.target.value }))} placeholder={t('3 أشهر', '3 months')} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-foreground mb-1 block">{t('الرسوم (₪)', 'Fees (₪)')}</label>
-                    <input type="number" value={form.fees} onChange={e => setForm(f => ({ ...f, fees: e.target.value === '' ? '' : Number(e.target.value) }))} min={0} placeholder={t('أدخل السعر', 'Enter price')} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
+                    <label className="text-sm font-medium text-foreground mb-1 block">{t('نوع الدفع', 'Payment Mode')}</label>
+                    <select
+                      value={form.payment_type}
+                      onChange={e => setForm(f => ({
+                        ...f,
+                        payment_type: e.target.value as 'full' | 'per_session',
+                        fees: e.target.value === 'full' ? f.fees : '',
+                        price_per_session: e.target.value === 'per_session' ? f.price_per_session : '',
+                      }))}
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none"
+                    >
+                      <option value="full">{t('دفع كامل للدورة', 'Full Course Payment')}</option>
+                      <option value="per_session">{t('دفع لكل حصة', 'Per Session Payment')}</option>
+                    </select>
                   </div>
                 </div>
+                {form.payment_type === 'full' ? (
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">{t('سعر الدورة الكامل (₪)', 'Full Course Price (₪)')}</label>
+                    <input type="number" value={form.fees} onChange={e => setForm(f => ({ ...f, fees: e.target.value === '' ? '' : Number(e.target.value) }))} min={0} placeholder={t('أدخل سعر الدورة', 'Enter course price')} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">{t('سعر الحصة الواحدة (₪)', 'Price Per Session (₪)')}</label>
+                    <input type="number" value={form.price_per_session} onChange={e => setForm(f => ({ ...f, price_per_session: e.target.value === '' ? '' : Number(e.target.value) }))} min={0} placeholder={t('أدخل سعر الحصة', 'Enter session price')} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
+                  </div>
+                )}
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1 block">{t('موعد الدفع (بعد كم حصة)', 'Payment interval (sessions)')}</label>
                   <input type="number" value={form.payment_interval_sessions || ''} onChange={e => setForm(f => ({ ...f, payment_interval_sessions: Number(e.target.value) || 0 }))} min={0} placeholder={t('0 = بدون تحديد', '0 = none')} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
@@ -542,9 +572,13 @@ export default function CoursesPage() {
                     </div>
                   </div>
                   {course.description && <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{course.description}</p>}
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
                     {course.duration && <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{course.duration}</span>}
-                    {course.fees > 0 && <span>₪ {course.fees}</span>}
+                    {course.payment_type === 'per_session' ? (
+                      <span>{t(`₪ ${course.price_per_session} / حصة`, `₪ ${course.price_per_session} / session`)}</span>
+                    ) : course.fees > 0 ? (
+                      <span>{t(`₪ ${course.fees} كامل`, `₪ ${course.fees} full`)}</span>
+                    ) : null}
                     <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />{studentNum}</span>
                   </div>
                   <PaymentMiniChart stats={pStats} />
