@@ -392,10 +392,33 @@ export default function CoursesPage() {
                     <input value={form.duration} onChange={e => setForm(f => ({ ...f, duration: e.target.value }))} placeholder={t('3 أشهر', '3 months')} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-foreground mb-1 block">{t('الرسوم (₪)', 'Fees (₪)')}</label>
-                    <input type="number" value={form.fees} onChange={e => setForm(f => ({ ...f, fees: e.target.value === '' ? '' : Number(e.target.value) }))} min={0} placeholder={t('أدخل السعر', 'Enter price')} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
+                    <label className="text-sm font-medium text-foreground mb-1 block">{t('نوع الدفع', 'Payment Mode')}</label>
+                    <select
+                      value={form.payment_type}
+                      onChange={e => setForm(f => ({
+                        ...f,
+                        payment_type: e.target.value as 'full' | 'per_session',
+                        fees: e.target.value === 'full' ? f.fees : '',
+                        price_per_session: e.target.value === 'per_session' ? f.price_per_session : '',
+                      }))}
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none"
+                    >
+                      <option value="full">{t('دفع كامل للدورة', 'Full Course Payment')}</option>
+                      <option value="per_session">{t('دفع لكل حصة', 'Per Session Payment')}</option>
+                    </select>
                   </div>
                 </div>
+                {form.payment_type === 'full' ? (
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">{t('سعر الدورة الكامل (₪)', 'Full Course Price (₪)')}</label>
+                    <input type="number" value={form.fees} onChange={e => setForm(f => ({ ...f, fees: e.target.value === '' ? '' : Number(e.target.value) }))} min={0} placeholder={t('أدخل سعر الدورة', 'Enter course price')} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">{t('سعر الحصة الواحدة (₪)', 'Price Per Session (₪)')}</label>
+                    <input type="number" value={form.price_per_session} onChange={e => setForm(f => ({ ...f, price_per_session: e.target.value === '' ? '' : Number(e.target.value) }))} min={0} placeholder={t('أدخل سعر الحصة', 'Enter session price')} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
+                  </div>
+                )}
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1 block">{t('موعد الدفع (بعد كم حصة)', 'Payment interval (sessions)')}</label>
                   <input type="number" value={form.payment_interval_sessions || ''} onChange={e => setForm(f => ({ ...f, payment_interval_sessions: Number(e.target.value) || 0 }))} min={0} placeholder={t('0 = بدون تحديد', '0 = none')} className="w-full px-3 py-2 rounded-lg border border-input bg-background/50 text-foreground focus:ring-2 focus:ring-ring outline-none" />
