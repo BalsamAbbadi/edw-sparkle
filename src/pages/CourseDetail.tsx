@@ -388,33 +388,27 @@ export default function CourseDetailPage() {
     },
   });
 
-  // Postpone with proper cascade: shift this and all subsequent sessions
+  // Postpone: move the selected session to the END of the cycle (after the last session,
+  // preserving the recurring interval). Subsequent sessions naturally "move forward" in sequence.
   const postponeSessionMutation = useMutation({
     mutationFn: async (sessionId: string) => {
-      const idx = sessions.findIndex((s: any) => s.id === sessionId);
-      if (idx < 0) return;
-      const sessionsToShift = sessions.slice(idx);
-      // Calculate the gap between consecutive sessions to maintain pattern
-      for (let i = sessionsToShift.length - 1; i >= 0; i--) {
-        const s = sessionsToShift[i];
-        let newDate: string;
-        if (i < sessionsToShift.length - 1) {
-          // Shift to next session's original date
-          newDate = sessionsToShift[i + 1].session_date;
-        } else {
-          // Last session: add 7 days
-          newDate = format(addDays(new Date(s.session_date), 7), 'yyyy-MM-dd');
-        }
-        // For first session (postponed one), shift by one week
-        if (i === 0) {
-          newDate = format(addDays(new Date(s.session_date), 7), 'yyyy-MM-dd');
-        }
+      const sorted = [...sessions].sort((a: any, b: any) =>
+        a.session_date.localeCompare(b.session_date) || a.start_time.localeCompare(b.start_time)
+      );
+      const idx = sorted.findIndex((s: any) => s.id === sessionId);
+      if (idx < 0 || sorted.length === 0) return;
+      const last = sorted[sorted.length - 1];
+      // Determine recurring gap (in days) from the last two sessions, default 7
+      let gap = 7;
+      if (sorted.length >= 2) {
+        const d1 = new Date(sorted[sorted.length - 2].session_date);
+        const d2 = new Date(last.session_date);
+        const diff = Math.round((d2.getTime() - d1.getTime()) / 86400000);
+        if (diff > 0) gap = diff;
       }
-      // Simpler approach: shift all from index onward by 7 days
-      for (const s of sessionsToShift) {
-        const newDate = format(addDays(new Date(s.session_date), 7), 'yyyy-MM-dd');
-        await supabase.from('sessions').update({ session_date: newDate }).eq('id', s.id);
-      }
+      const newDate = format(addDays(new Date(last.session_date), gap), 'yyyy-MM-dd');
+      const { error } = await supabase.from('sessions').update({ session_date: newDate }).eq('id', sessionId);
+      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['course-sessions', id] });
