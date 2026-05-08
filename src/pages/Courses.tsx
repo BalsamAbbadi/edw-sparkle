@@ -572,9 +572,13 @@ export default function CoursesPage() {
                     </div>
                   </div>
                   {course.description && <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{course.description}</p>}
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
                     {course.duration && <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{course.duration}</span>}
-                    {course.fees > 0 && <span>₪ {course.fees}</span>}
+                    {course.payment_type === 'per_session' ? (
+                      <span>{t(`₪ ${course.price_per_session} / حصة`, `₪ ${course.price_per_session} / session`)}</span>
+                    ) : course.fees > 0 ? (
+                      <span>{t(`₪ ${course.fees} كامل`, `₪ ${course.fees} full`)}</span>
+                    ) : null}
                     <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />{studentNum}</span>
                   </div>
                   <PaymentMiniChart stats={pStats} />
