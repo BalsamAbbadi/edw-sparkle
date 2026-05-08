@@ -388,33 +388,27 @@ export default function CourseDetailPage() {
     },
   });
 
-  // Postpone with proper cascade: shift this and all subsequent sessions
+  // Postpone: move the selected session to the END of the cycle (after the last session,
+  // preserving the recurring interval). Subsequent sessions naturally "move forward" in sequence.
   const postponeSessionMutation = useMutation({
     mutationFn: async (sessionId: string) => {
-      const idx = sessions.findIndex((s: any) => s.id === sessionId);
-      if (idx < 0) return;
-      const sessionsToShift = sessions.slice(idx);
-      // Calculate the gap between consecutive sessions to maintain pattern
-      for (let i = sessionsToShift.length - 1; i >= 0; i--) {
-        const s = sessionsToShift[i];
-        let newDate: string;
-        if (i < sessionsToShift.length - 1) {
-          // Shift to next session's original date
-          newDate = sessionsToShift[i + 1].session_date;
-        } else {
-          // Last session: add 7 days
-          newDate = format(addDays(new Date(s.session_date), 7), 'yyyy-MM-dd');
-        }
-        // For first session (postponed one), shift by one week
-        if (i === 0) {
-          newDate = format(addDays(new Date(s.session_date), 7), 'yyyy-MM-dd');
-        }
+      const sorted = [...sessions].sort((a: any, b: any) =>
+        a.session_date.localeCompare(b.session_date) || a.start_time.localeCompare(b.start_time)
+      );
+      const idx = sorted.findIndex((s: any) => s.id === sessionId);
+      if (idx < 0 || sorted.length === 0) return;
+      const last = sorted[sorted.length - 1];
+      // Determine recurring gap (in days) from the last two sessions, default 7
+      let gap = 7;
+      if (sorted.length >= 2) {
+        const d1 = new Date(sorted[sorted.length - 2].session_date);
+        const d2 = new Date(last.session_date);
+        const diff = Math.round((d2.getTime() - d1.getTime()) / 86400000);
+        if (diff > 0) gap = diff;
       }
-      // Simpler approach: shift all from index onward by 7 days
-      for (const s of sessionsToShift) {
-        const newDate = format(addDays(new Date(s.session_date), 7), 'yyyy-MM-dd');
-        await supabase.from('sessions').update({ session_date: newDate }).eq('id', s.id);
-      }
+      const newDate = format(addDays(new Date(last.session_date), gap), 'yyyy-MM-dd');
+      const { error } = await supabase.from('sessions').update({ session_date: newDate }).eq('id', sessionId);
+      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['course-sessions', id] });
@@ -422,6 +416,43 @@ export default function CourseDetailPage() {
       notify('session', t(`تم تأجيل حصة وإزاحة الحصص في ${course?.title}`, `Session postponed in ${course?.title}`), `/courses/${id}`);
       toast.success(t('تم تأجيل الحصة وإزاحة باقي الحصص', 'Session postponed'));
     },
+  });
+
+  // Duplicate a session: copies all data, sets a new date one cycle later (default +7 days)
+  const duplicateSessionMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      const sorted = [...sessions].sort((a: any, b: any) =>
+        a.session_date.localeCompare(b.session_date) || a.start_time.localeCompare(b.start_time)
+      );
+      const src = sorted.find((s: any) => s.id === sessionId);
+      if (!src) return;
+      // Use 7-day step so teacher only edits day/date/time afterwards
+      const newDate = format(addDays(new Date(src.session_date), 7), 'yyyy-MM-dd');
+      const { data: created, error } = await supabase.from('sessions').insert({
+        user_id: user!.id,
+        course_id: id!,
+        title: src.title,
+        session_date: newDate,
+        start_time: src.start_time,
+        end_time: src.end_time,
+        color: src.color,
+        session_notes: '',
+      } as any).select().single();
+      if (error) throw error;
+      return created;
+    },
+    onSuccess: (created: any) => {
+      qc.invalidateQueries({ queryKey: ['course-sessions', id] });
+      qc.invalidateQueries({ queryKey: ['sessions'] });
+      qc.invalidateQueries({ queryKey: ['all-sessions-conflict'] });
+      toast.success(t('تم نسخ الحصة', 'Session duplicated'));
+      // Open edit panel on the new one so teacher can adjust day/date/time
+      if (created?.id) {
+        setEditSessionId(created.id);
+        setEditSessionForm({ session_date: created.session_date, start_time: created.start_time, end_time: created.end_time || '' });
+      }
+    },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const saveSessionNoteMutation = useMutation({
@@ -671,9 +702,10 @@ export default function CourseDetailPage() {
                       {s.session_notes && <p className="text-xs text-warning mt-1">📝 {s.session_notes}</p>}
                     </div>
                     <div className="flex gap-1">
+                      <button title={t('نسخ مع تعديل', 'Duplicate')} onClick={() => duplicateSessionMutation.mutate(s.id)} className="p-2 rounded-lg hover:bg-primary/10"><Plus className="w-4 h-4 text-primary" /></button>
                       <button onClick={() => { setSessionNoteId(s.id); setSessionNoteText(s.session_notes || ''); }} className="p-2 rounded-lg hover:bg-muted"><StickyNote className="w-4 h-4 text-warning" /></button>
                       <button onClick={() => { setEditSessionId(s.id); setEditSessionForm({ session_date: s.session_date, start_time: s.start_time, end_time: s.end_time || '' }); }} className="p-2 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4 text-muted-foreground" /></button>
-                      <button onClick={() => { if (window.confirm(t('تأجيل وإزاحة جميع الحصص التالية؟', 'Postpone and shift all following sessions?'))) postponeSessionMutation.mutate(s.id); }} className="p-2 rounded-lg hover:bg-warning/10"><Calendar className="w-4 h-4 text-warning" /></button>
+                      <button title={t('تأجيل الحصة', 'Postpone')} onClick={() => { if (window.confirm(t('تأجيل هذه الحصة إلى نهاية الدورة؟', 'Postpone this session to the end of the course?'))) postponeSessionMutation.mutate(s.id); }} className="p-2 rounded-lg hover:bg-warning/10"><Calendar className="w-4 h-4 text-warning" /></button>
                       <button onClick={() => { if (window.confirm(t('حذف الحصة؟', 'Delete session?'))) deleteSessionMutation.mutate(s.id); }} className="p-2 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
                     </div>
                   </div>
