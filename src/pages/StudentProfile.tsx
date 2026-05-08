@@ -198,10 +198,13 @@ export default function StudentProfile() {
             const course = enr.courses;
             const payment = payments.find((p: any) => p.course_id === enr.course_id);
             const courseSessions = allSessions.filter((s: any) => s.course_id === enr.course_id);
-            const pastSessions = courseSessions.filter((s: any) => s.session_date <= today);
+            const completedSessions = courseSessions.filter((s: any) => {
+              const endTime = s.end_time || s.start_time;
+              return s.session_date < today || (s.session_date === today && endTime <= new Date().toTimeString().slice(0, 5));
+            });
             const studentAttendance = attendance.filter((a: any) => a.course_id === enr.course_id);
             const attended = payment?.attended_sessions_count ?? studentAttendance.filter((a: any) => (a.attended ?? a.is_present) && (a.sessions?.session_date || '') <= today).length;
-            const missed = Math.max(pastSessions.length - attended, 0);
+            const missed = Math.max(completedSessions.length - attended, 0);
             const expectedAmount = Number(payment?.expected_amount || 0);
             const paidAmount = Number(payment?.amount_paid || 0);
             const remainingAmount = Number(payment?.remaining_amount || 0);
@@ -213,7 +216,11 @@ export default function StudentProfile() {
                     <h3 className="font-bold text-foreground hover:text-primary transition-colors">{course?.title}</h3>
                     {course?.description && <p className="text-sm text-muted-foreground">{course.description}</p>}
                     <div className="flex gap-3 mt-1 text-sm text-muted-foreground">
-                      {course?.fees > 0 && <span>₪ {course.fees}</span>}
+                      {course?.payment_type === 'per_session'
+                        ? <span>{t(`₪ ${course?.price_per_session || 0} / حصة`, `₪ ${course?.price_per_session || 0} / session`)}</span>
+                        : course?.fees > 0
+                          ? <span>{t(`₪ ${course.fees} كامل`, `₪ ${course.fees} full`)}</span>
+                          : null}
                       {course?.duration && <span>{course.duration}</span>}
                     </div>
                   </div>
@@ -245,12 +252,12 @@ export default function StudentProfile() {
                       <Calendar className="w-4 h-4 text-primary" />{t('الحضور', 'Attendance')}
                     </span>
                     <span className="text-sm font-bold text-primary">
-                      {t(`حضر ${attended} / ${pastSessions.length}`, `Attended ${attended} / ${pastSessions.length}`)}
+                      {t(`حضر ${attended} / ${completedSessions.length}`, `Attended ${attended} / ${completedSessions.length}`)}
                     </span>
                   </div>
-                  {pastSessions.length > 0 && (
+                  {completedSessions.length > 0 && (
                     <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pastSessions.length > 0 ? (attended / pastSessions.length) * 100 : 0}%` }} />
+                      <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${completedSessions.length > 0 ? (attended / completedSessions.length) * 100 : 0}%` }} />
                     </div>
                   )}
                   <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
@@ -263,11 +270,11 @@ export default function StudentProfile() {
                 </div>
 
                 {/* Session log */}
-                {pastSessions.length > 0 && (
+                {completedSessions.length > 0 && (
                   <details className="group">
                     <summary className="text-sm font-medium text-muted-foreground cursor-pointer hover:text-foreground">{t('سجل الحصص', 'Session Log')}</summary>
                     <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
-                      {pastSessions.map((s: any) => {
+                      {completedSessions.map((s: any) => {
                         const att = studentAttendance.find((a: any) => a.session_id === s.id);
                         return (
                           <div key={s.id} className="flex items-center justify-between bg-muted/20 rounded-lg px-3 py-2 text-sm">
