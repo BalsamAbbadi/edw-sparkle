@@ -702,9 +702,10 @@ export default function CourseDetailPage() {
                       {s.session_notes && <p className="text-xs text-warning mt-1">📝 {s.session_notes}</p>}
                     </div>
                     <div className="flex gap-1">
+                      <button title={t('نسخ مع تعديل', 'Duplicate')} onClick={() => duplicateSessionMutation.mutate(s.id)} className="p-2 rounded-lg hover:bg-primary/10"><Plus className="w-4 h-4 text-primary" /></button>
                       <button onClick={() => { setSessionNoteId(s.id); setSessionNoteText(s.session_notes || ''); }} className="p-2 rounded-lg hover:bg-muted"><StickyNote className="w-4 h-4 text-warning" /></button>
                       <button onClick={() => { setEditSessionId(s.id); setEditSessionForm({ session_date: s.session_date, start_time: s.start_time, end_time: s.end_time || '' }); }} className="p-2 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4 text-muted-foreground" /></button>
-                      <button onClick={() => { if (window.confirm(t('تأجيل وإزاحة جميع الحصص التالية؟', 'Postpone and shift all following sessions?'))) postponeSessionMutation.mutate(s.id); }} className="p-2 rounded-lg hover:bg-warning/10"><Calendar className="w-4 h-4 text-warning" /></button>
+                      <button title={t('تأجيل الحصة', 'Postpone')} onClick={() => { if (window.confirm(t('تأجيل هذه الحصة إلى نهاية الدورة؟', 'Postpone this session to the end of the course?'))) postponeSessionMutation.mutate(s.id); }} className="p-2 rounded-lg hover:bg-warning/10"><Calendar className="w-4 h-4 text-warning" /></button>
                       <button onClick={() => { if (window.confirm(t('حذف الحصة؟', 'Delete session?'))) deleteSessionMutation.mutate(s.id); }} className="p-2 rounded-lg hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
                     </div>
                   </div>
