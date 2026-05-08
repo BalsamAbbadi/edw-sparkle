@@ -175,18 +175,20 @@ export default function CoursesPage() {
     mutationFn: async (formData: CourseForm) => {
       const fees = formData.fees === '' ? 0 : Number(formData.fees);
       const pricePerSession = formData.price_per_session === '' ? 0 : Number(formData.price_per_session);
+      const normalizedFees = formData.payment_type === 'full' ? fees : 0;
+      const normalizedPricePerSession = formData.payment_type === 'per_session' ? pricePerSession : 0;
       if (editingId) {
         const { error } = await supabase.from('courses').update({
-          title: formData.title, description: formData.description, duration: formData.duration, fees, recurring_schedule: formData.recurring_schedule as any,
+          title: formData.title, description: formData.description, duration: formData.duration, fees: normalizedFees, recurring_schedule: formData.recurring_schedule as any,
           course_type: formData.course_type, payment_interval_sessions: formData.payment_interval_sessions,
-          payment_type: formData.payment_type, price_per_session: pricePerSession,
+          payment_type: formData.payment_type, price_per_session: normalizedPricePerSession,
         } as any).eq('id', editingId);
         if (error) throw error;
       } else {
         const { data: course, error } = await supabase.from('courses').insert({
-          user_id: user!.id, title: formData.title, description: formData.description, duration: formData.duration, fees, recurring_schedule: formData.recurring_schedule as any,
+          user_id: user!.id, title: formData.title, description: formData.description, duration: formData.duration, fees: normalizedFees, recurring_schedule: formData.recurring_schedule as any,
           course_type: formData.course_type, payment_interval_sessions: formData.payment_interval_sessions, start_date: formData.startDate,
-          payment_type: formData.payment_type, price_per_session: pricePerSession,
+          payment_type: formData.payment_type, price_per_session: normalizedPricePerSession,
         } as any).select().single();
         if (error) throw error;
         await createSessions(course.id, formData.title, formData.recurring_schedule, formData.totalSessions, formData.startDate, formData.sessionColor);
@@ -206,6 +208,11 @@ export default function CoursesPage() {
       const { data: newCourse, error } = await supabase.from('courses').insert({
         user_id: user!.id, title: `${course.title} (${t('نسخة', 'Copy')})`,
         description: course.description, duration: course.duration, fees: course.fees,
+        payment_type: course.payment_type || 'full',
+        price_per_session: course.price_per_session || 0,
+        payment_interval_sessions: course.payment_interval_sessions || 0,
+        course_type: course.course_type || 'long',
+        start_date: startDate,
         recurring_schedule: course.recurring_schedule,
       }).select().single();
       if (error) throw error;
@@ -262,9 +269,9 @@ export default function CoursesPage() {
     setEditingId(course.id);
     setForm({
       title: course.title, description: course.description || '', duration: course.duration || '',
-      fees: course.fees || '', totalSessions: 16, startDate: format(new Date(), 'yyyy-MM-dd'),
+      fees: course.payment_type === 'full' ? (course.fees || '') : '', totalSessions: 16, startDate: format(new Date(), 'yyyy-MM-dd'),
       payment_type: (course as any).payment_type || 'full',
-      price_per_session: (course as any).price_per_session || '',
+      price_per_session: (course as any).payment_type === 'per_session' ? ((course as any).price_per_session || '') : '',
       sessionColor: SESSION_COLORS[0],
       course_type: (course as any).course_type || 'long',
       payment_interval_sessions: (course as any).payment_interval_sessions || 0,
