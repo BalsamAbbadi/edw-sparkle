@@ -418,6 +418,43 @@ export default function CourseDetailPage() {
     },
   });
 
+  // Duplicate a session: copies all data, sets a new date one cycle later (default +7 days)
+  const duplicateSessionMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      const sorted = [...sessions].sort((a: any, b: any) =>
+        a.session_date.localeCompare(b.session_date) || a.start_time.localeCompare(b.start_time)
+      );
+      const src = sorted.find((s: any) => s.id === sessionId);
+      if (!src) return;
+      // Use 7-day step so teacher only edits day/date/time afterwards
+      const newDate = format(addDays(new Date(src.session_date), 7), 'yyyy-MM-dd');
+      const { data: created, error } = await supabase.from('sessions').insert({
+        user_id: user!.id,
+        course_id: id!,
+        title: src.title,
+        session_date: newDate,
+        start_time: src.start_time,
+        end_time: src.end_time,
+        color: src.color,
+        session_notes: '',
+      } as any).select().single();
+      if (error) throw error;
+      return created;
+    },
+    onSuccess: (created: any) => {
+      qc.invalidateQueries({ queryKey: ['course-sessions', id] });
+      qc.invalidateQueries({ queryKey: ['sessions'] });
+      qc.invalidateQueries({ queryKey: ['all-sessions-conflict'] });
+      toast.success(t('تم نسخ الحصة', 'Session duplicated'));
+      // Open edit panel on the new one so teacher can adjust day/date/time
+      if (created?.id) {
+        setEditSessionId(created.id);
+        setEditSessionForm({ session_date: created.session_date, start_time: created.start_time, end_time: created.end_time || '' });
+      }
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const saveSessionNoteMutation = useMutation({
     mutationFn: async ({ sid, notes }: { sid: string; notes: string }) => {
       const { error } = await supabase.from('sessions').update({ session_notes: notes }).eq('id', sid);
