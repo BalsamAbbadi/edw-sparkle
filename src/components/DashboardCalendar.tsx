@@ -46,6 +46,23 @@ export function DashboardCalendar() {
     enabled: !!user,
   });
 
+  // Payment-due course ids: courses that have any payment with remaining_amount > 0 and due today or earlier
+  const { data: dueCourseIds = new Set<string>() } = useQuery({
+    queryKey: ['payment-due-course-ids'],
+    queryFn: async () => {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const { data, error } = await supabase
+        .from('payments')
+        .select('course_id, remaining_amount, due_date')
+        .gt('remaining_amount', 0)
+        .not('due_date', 'is', null)
+        .lte('due_date', today);
+      if (error) throw error;
+      return new Set((data || []).map((p: any) => p.course_id));
+    },
+    enabled: !!user,
+  });
+
   const updateSessionMutation = useMutation({
     mutationFn: async ({ id, date, time }: { id: string; date: string; time: string }) => {
       const { error } = await supabase.from('sessions').update({ session_date: date, start_time: time }).eq('id', id);
