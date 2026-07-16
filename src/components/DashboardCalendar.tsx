@@ -145,15 +145,24 @@ export function DashboardCalendar() {
 
   const dayNames = lang === 'ar' ? DAY_NAMES_AR_SHORT : DAY_NAMES_EN_SHORT;
 
-  const SessionBlock = ({ session, compact = false }: { session: any; compact?: boolean }) => (
+  const SessionBlock = ({ session, compact = false }: { session: any; compact?: boolean }) => {
+    const hasPaymentDue = session.course_id && (dueCourseIds as Set<string>).has(session.course_id);
+    return (
     <div
       draggable
       onDragStart={e => handleDragStart(e, session)}
       onClick={() => navigate(`/sessions/${session.id}`)}
       className={`${session.color || 'bg-primary/20 text-primary border-primary/30'} border rounded-lg ${compact ? 'p-1.5 text-xs' : 'p-3'} cursor-pointer relative group/session`}
     >
-      <div className="font-semibold truncate">{session.title}</div>
-      <div className={`opacity-70 ${compact ? '' : 'text-sm'}`}>{session.start_time?.slice(0, 5)}{session.end_time ? ` - ${session.end_time?.slice(0, 5)}` : ''}</div>
+      <div className="font-semibold truncate flex items-center gap-1">
+        <span className="truncate">{session.title}</span>
+        {hasPaymentDue && (
+          <span title={t('يوجد استحقاق دفع', 'Payment due')} className="inline-flex items-center justify-center shrink-0 w-4 h-4 rounded-full bg-destructive text-destructive-foreground animate-pulse">
+            <DollarSign className="w-2.5 h-2.5" />
+          </span>
+        )}
+      </div>
+      <div className={`opacity-70 ${compact ? '' : 'text-sm'}`}>{formatTime(session.start_time, lang)}{session.end_time ? ` - ${formatTime(session.end_time, lang)}` : ''}</div>
       {session.session_notes && <div className="absolute top-1 end-1"><StickyNote className="w-3 h-3 text-warning" /></div>}
       <button
         onClick={(e) => { e.stopPropagation(); setNoteSession(session); setNoteText(session.session_notes || ''); }}
@@ -162,7 +171,8 @@ export function DashboardCalendar() {
         <StickyNote className="w-3 h-3" />
       </button>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden bg-card/60 backdrop-blur-xl border border-border/50">
