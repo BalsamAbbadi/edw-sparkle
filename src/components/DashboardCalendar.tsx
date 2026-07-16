@@ -253,7 +253,7 @@ export function DashboardCalendar() {
               <div className="space-y-0">
                 {hours.map(hour => (
                   <div key={hour} className="grid grid-cols-8 gap-1">
-                    <div className="text-[11px] text-muted-foreground py-1.5 text-center">{`${hour}:00`}</div>
+                    <div className="text-[11px] text-muted-foreground py-1.5 text-center">{formatHourLabel(hour, lang)}</div>
                     {weekDays.map(day => {
                       const cellSessions = getSessionsForDateHour(day, hour);
                       return (
