@@ -9,6 +9,8 @@ import { ar } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { formatTime, formatHourLabel } from '@/lib/time';
+import { DollarSign } from 'lucide-react';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -40,6 +42,23 @@ export function DashboardCalendar() {
       const { data, error } = await supabase.from('sessions').select('*').order('session_date', { ascending: true });
       if (error) throw error;
       return data;
+    },
+    enabled: !!user,
+  });
+
+  // Payment-due course ids: courses that have any payment with remaining_amount > 0 and due today or earlier
+  const { data: dueCourseIds = new Set<string>() } = useQuery({
+    queryKey: ['payment-due-course-ids'],
+    queryFn: async () => {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const { data, error } = await supabase
+        .from('payments')
+        .select('course_id, remaining_amount, due_date')
+        .gt('remaining_amount', 0)
+        .not('due_date', 'is', null)
+        .lte('due_date', today);
+      if (error) throw error;
+      return new Set((data || []).map((p: any) => p.course_id));
     },
     enabled: !!user,
   });
@@ -80,9 +99,11 @@ export function DashboardCalendar() {
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
-  const hours = extendedHours
-    ? Array.from({ length: 17 }, (_, i) => i + 7)  // 7 AM to 11 PM
-    : Array.from({ length: 12 }, (_, i) => i + 7); // 7 AM to 6 PM (more compact)
+  const hours = viewMode === 'day'
+    ? Array.from({ length: 24 }, (_, i) => i) // full 24h in day view
+    : extendedHours
+      ? Array.from({ length: 17 }, (_, i) => i + 7)
+      : Array.from({ length: 12 }, (_, i) => i + 7);
 
   const views: { key: ViewMode; label: string }[] = [
     { key: 'day', label: t('يوم', 'Day') },
@@ -124,15 +145,24 @@ export function DashboardCalendar() {
 
   const dayNames = lang === 'ar' ? DAY_NAMES_AR_SHORT : DAY_NAMES_EN_SHORT;
 
-  const SessionBlock = ({ session, compact = false }: { session: any; compact?: boolean }) => (
+  const SessionBlock = ({ session, compact = false }: { session: any; compact?: boolean }) => {
+    const hasPaymentDue = session.course_id && (dueCourseIds as Set<string>).has(session.course_id);
+    return (
     <div
       draggable
       onDragStart={e => handleDragStart(e, session)}
       onClick={() => navigate(`/sessions/${session.id}`)}
       className={`${session.color || 'bg-primary/20 text-primary border-primary/30'} border rounded-lg ${compact ? 'p-1.5 text-xs' : 'p-3'} cursor-pointer relative group/session`}
     >
-      <div className="font-semibold truncate">{session.title}</div>
-      <div className={`opacity-70 ${compact ? '' : 'text-sm'}`}>{session.start_time?.slice(0, 5)}{session.end_time ? ` - ${session.end_time?.slice(0, 5)}` : ''}</div>
+      <div className="font-semibold truncate flex items-center gap-1">
+        <span className="truncate">{session.title}</span>
+        {hasPaymentDue && (
+          <span title={t('يوجد استحقاق دفع', 'Payment due')} className="inline-flex items-center justify-center shrink-0 w-4 h-4 rounded-full bg-destructive text-destructive-foreground animate-pulse">
+            <DollarSign className="w-2.5 h-2.5" />
+          </span>
+        )}
+      </div>
+      <div className={`opacity-70 ${compact ? '' : 'text-sm'}`}>{formatTime(session.start_time, lang)}{session.end_time ? ` - ${formatTime(session.end_time, lang)}` : ''}</div>
       {session.session_notes && <div className="absolute top-1 end-1"><StickyNote className="w-3 h-3 text-warning" /></div>}
       <button
         onClick={(e) => { e.stopPropagation(); setNoteSession(session); setNoteText(session.session_notes || ''); }}
@@ -141,7 +171,8 @@ export function DashboardCalendar() {
         <StickyNote className="w-3 h-3" />
       </button>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden bg-card/60 backdrop-blur-xl border border-border/50">
@@ -222,7 +253,7 @@ export function DashboardCalendar() {
               <div className="space-y-0">
                 {hours.map(hour => (
                   <div key={hour} className="grid grid-cols-8 gap-1">
-                    <div className="text-[11px] text-muted-foreground py-1.5 text-center">{`${hour}:00`}</div>
+                    <div className="text-[11px] text-muted-foreground py-1.5 text-center">{formatHourLabel(hour, lang)}</div>
                     {weekDays.map(day => {
                       const cellSessions = getSessionsForDateHour(day, hour);
                       return (
@@ -242,7 +273,7 @@ export function DashboardCalendar() {
               const cellSessions = getSessionsForDateHour(currentDate, hour);
               return (
                 <div key={hour} className="flex gap-3" onDragOver={handleDragOver} onDrop={e => handleDrop(e, currentDate, hour)}>
-                  <div className="w-16 text-xs text-muted-foreground py-2 text-center shrink-0">{`${hour}:00`}</div>
+                  <div className="w-16 text-xs text-muted-foreground py-2 text-center shrink-0">{formatHourLabel(hour, lang)}</div>
                   <div className="flex-1 border-t border-border/30 min-h-[42px] py-1.5 hover:bg-muted/20 rounded-lg transition-colors px-2">
                     {cellSessions.map((session: any) => <SessionBlock key={session.id} session={session} />)}
                   </div>

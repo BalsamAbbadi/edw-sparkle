@@ -462,6 +462,7 @@ export default function CoursesPage() {
                       <input type="time" value={slot.startTime} onChange={e => updateScheduleSlot(idx, 'startTime', e.target.value)} className="px-2 py-1.5 rounded-lg border border-input bg-background/50 text-foreground text-sm" />
                       <span className="text-muted-foreground text-sm">-</span>
                       <input type="time" value={slot.endTime} onChange={e => updateScheduleSlot(idx, 'endTime', e.target.value)} className="px-2 py-1.5 rounded-lg border border-input bg-background/50 text-foreground text-sm" />
+                      <button type="button" title={t('نسخ الحصة', 'Duplicate slot')} onClick={() => setForm(f => ({ ...f, recurring_schedule: [...f.recurring_schedule.slice(0, idx + 1), { ...slot }, ...f.recurring_schedule.slice(idx + 1)] }))} className="text-primary p-1 rounded hover:bg-primary/10"><Plus className="w-4 h-4" /></button>
                       <button type="button" onClick={() => removeScheduleSlot(idx)} className="text-destructive"><X className="w-4 h-4" /></button>
                     </div>
                   ))}
