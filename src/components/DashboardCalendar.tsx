@@ -9,6 +9,8 @@ import { ar } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { formatTime, formatHourLabel } from '@/lib/time';
+import { DollarSign } from 'lucide-react';
 
 type ViewMode = 'day' | 'week' | 'month';
 
